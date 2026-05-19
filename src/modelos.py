@@ -41,3 +41,4 @@ class ResultadoRecomendacao:
     videos_encontrados: int
     canais_diferentes: int
     motivo: str
+    videos: list[VideoColetado]

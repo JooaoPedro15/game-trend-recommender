@@ -1,4 +1,5 @@
 from collections import defaultdict
+from unicodedata import combining, normalize
 
 from detector_jogo import detectar_jogos_no_video
 from modelos import (
@@ -12,11 +13,19 @@ from modelos import (
 FRASES_DESCOBERTA = [
     "qual o nome do jogo",
     "que jogo e esse",
-    "que jogo é esse",
+    "qual nome",
+    "nome?",
+    "que jogo",
+    "jogo?",
+    "qual game",
+    "what game",
+    "game name",
+    "nome do game",
     "nome do jogo",
     "onde baixa",
     "tem na steam",
-    "game name",
+    "steam?",
+    "link do jogo",
 ]
 
 
@@ -40,6 +49,7 @@ def calcular_ranking(
     resultados = []
     for nome_jogo, videos_jogo in agregados.items():
         jogo = jogos_por_nome[nome_jogo]
+        videos_ordenados = _ordenar_videos_por_influencia(videos_jogo)
         canais_diferentes = len({video.canal for video in videos_jogo})
         score_tendencia = _normalizar(tendencias_brutas[nome_jogo], maior_tendencia)
         score_fit_canal = _limitar(jogo.fit_inicial * 10)
@@ -63,8 +73,14 @@ def calcular_ranking(
                 videos_encontrados=len(videos_jogo),
                 canais_diferentes=canais_diferentes,
                 motivo=_gerar_motivo(
-                    videos_jogo, score_tendencia, score_descoberta, score_saturacao
+                    jogo,
+                    videos_jogo,
+                    score_tendencia,
+                    score_descoberta,
+                    score_saturacao,
+                    canais_diferentes,
                 ),
+                videos=videos_ordenados,
             )
         )
 
@@ -109,7 +125,7 @@ def _calcular_score_descoberta(videos: list[VideoColetado]) -> float:
     total_sinais = 0
 
     for video in videos:
-        texto = f"{video.titulo} {video.texto_comentarios}".casefold()
+        texto = _normalizar_texto(f"{video.titulo} {video.texto_comentarios}")
         sinais_no_video = sum(1 for frase in FRASES_DESCOBERTA if frase in texto)
         if sinais_no_video:
             videos_com_sinal += 1
@@ -142,25 +158,46 @@ def _limitar(valor: float, minimo: float = 0.0, maximo: float = 100.0) -> float:
 
 
 def _gerar_motivo(
+    jogo: JogoSeed,
     videos: list[VideoColetado],
     score_tendencia: float,
     score_descoberta: float,
     score_saturacao: float,
+    canais_diferentes: int,
 ) -> str:
-    partes = []
+    maior_views = max((video.views for video in videos), default=0)
+    tem_alta_performance = score_tendencia >= 70 or maior_views >= 500_000
+    tem_curiosidade = score_descoberta >= 50
+    tem_varios_canais = canais_diferentes > 1
+    tem_fit_alto = jogo.fit_inicial >= 8
+    tem_poucos_canais = score_saturacao >= 75
 
-    if score_tendencia >= 70:
-        partes.append("apareceu em videos recentes com boa performance")
-    else:
-        partes.append("foi mencionado nos videos coletados")
+    if tem_alta_performance and tem_curiosidade:
+        return "Jogo apareceu em videos com alta performance e comentarios de curiosidade."
 
-    if score_descoberta >= 50:
-        partes.append("comentarios perguntando o nome do jogo")
+    if tem_fit_alto and tem_varios_canais:
+        return "Jogo tem alto fit com o canal e apareceu em mais de um canal de referencia."
 
-    if score_saturacao >= 75:
-        partes.append("ainda apareceu em poucos canais de referencia")
+    if tem_poucos_canais and tem_alta_performance:
+        return "Jogo ainda apareceu em poucos canais, mas teve boa performance, indicando possivel oportunidade."
 
-    if not partes:
-        return f"Jogo encontrado em {len(videos)} video(s) coletado(s)."
+    if tem_fit_alto and tem_curiosidade:
+        return "Jogo combina com o canal e gerou curiosidade nos comentarios."
 
-    return "Jogo " + " e ".join(partes) + "."
+    if tem_fit_alto:
+        return "Jogo tem bom fit inicial com o canal e foi detectado nos videos coletados."
+
+    return f"Jogo encontrado em {len(videos)} video(s) coletado(s)."
+
+
+def _ordenar_videos_por_influencia(videos: list[VideoColetado]) -> list[VideoColetado]:
+    return sorted(videos, key=_score_video, reverse=True)
+
+
+def _normalizar_texto(texto: str) -> str:
+    texto_sem_acento = "".join(
+        caractere
+        for caractere in normalize("NFKD", texto)
+        if not combining(caractere)
+    )
+    return texto_sem_acento.casefold()
