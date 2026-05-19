@@ -105,3 +105,11 @@ score_saturacao * 0.10
 - Criar uma rotina de validacao dos CSVs.
 - Exportar o ranking para CSV ou Markdown.
 - Em outra sprint, avaliar coleta automatica, APIs ou interface.
+
+## Cuidados para repositorio publico
+
+Este projeto tem um `.gitignore` preparado para bloquear caches, ambientes locais, arquivos `.env`, segredos e pastas de dados privados.
+
+Mantenha os CSVs versionados como exemplos ficticios ou dados que voce aceita publicar. Para dados reais de pesquisa, use arquivos locais como `data/videos_coletados.local.csv` ou pastas como `data/private/`, que nao devem subir para o GitHub.
+
+Veja o checklist em `docs/publicacao_github.md` antes de fazer push.

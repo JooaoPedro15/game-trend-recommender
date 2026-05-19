@@ -1,0 +1,52 @@
+# Python caches and build output
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Local virtual environments
+.venv/
+venv/
+env/
+
+# Local config and secrets
+.env
+.env.*
+!.env.example
+secrets/
+private/
+*.pem
+*.key
+*.token
+*.secret
+credentials*.json
+token*.json
+
+# Manual/private data that should not go to a public repo
+data/raw/
+data/private/
+data/privado/
+data/exports/
+data/*.local.csv
+data/*.private.csv
+data/*.privado.csv
+data/*_real.csv
+data/*_sensivel.csv
+
+# Keep the public example CSVs versioned
+!data/canais_referencia.csv
+!data/jogos_seed.csv
+!data/videos_coletados.csv
+
+# OS, editor and logs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+logs/
