@@ -193,6 +193,11 @@ def _gerar_motivo(
     tem_fit_alto = jogo.fit_inicial >= 8
     tem_poucos_canais = score_saturacao >= 75
 
+    tem_video_recente = _tem_video_recente(videos)
+
+    if tem_video_recente and tem_alta_performance:
+     return "Jogo apareceu em videos recentes com boa performance, indicando tendencia atual."
+
     if tem_alta_performance and tem_curiosidade:
         return "Jogo apareceu em videos com alta performance e comentarios de curiosidade."
 
@@ -222,3 +227,17 @@ def _normalizar_texto(texto: str) -> str:
         if not combining(caractere)
     )
     return texto_sem_acento.casefold()
+
+def _tem_video_recente(videos: list[VideoColetado]) -> bool:
+    for video in videos:
+        try:
+            data_video = date.fromisoformat(video.data_publicacao)
+        except ValueError:
+            continue
+
+        dias = (date.today() - data_video).days
+
+        if dias <= 7:
+            return True
+
+    return False
