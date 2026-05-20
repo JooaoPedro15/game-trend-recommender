@@ -214,6 +214,65 @@ def test_ranking_prioriza_video_mais_recente():
 
     assert ranking[0].jogo.nome == "Game Recente"
 
+    # Testa se um video com maior engajamento pode superar um video com mais views.
+def test_ranking_prioriza_video_com_maior_engajamento():
+    hoje = date.today().isoformat()
+
+    jogo_mais_views = JogoSeed(
+        nome="Game Mais Views",
+        aliases=[],
+        genero="terror",
+        fit_inicial=8.0,
+    )
+
+    jogo_mais_engajamento = JogoSeed(
+        nome="Game Mais Engajamento",
+        aliases=[],
+        genero="terror",
+        fit_inicial=8.0,
+    )
+
+    video_mais_views = VideoColetado(
+        titulo="Game Mais Views viralizou",
+        canal="Canal Teste",
+        plataforma="YouTube",
+        url="https://youtube.com/mais-views",
+        views=100000,
+        likes=1000,
+        comentarios=10,
+        data_publicacao=hoje,
+        texto_comentarios="",
+    )
+
+    video_mais_engajamento = VideoColetado(
+        titulo="Game Mais Engajamento viralizou",
+        canal="Canal Teste",
+        plataforma="YouTube",
+        url="https://youtube.com/mais-engajamento",
+        views=60000,
+        likes=10000,
+        comentarios=1000,
+        data_publicacao=hoje,
+        texto_comentarios="",
+    )
+
+    canais = [
+        CanalReferencia(
+            nome="Canal Teste",
+            plataforma="YouTube",
+            url="https://youtube.com/canal",
+            peso=1.0,
+        )
+    ]
+
+    ranking = calcular_ranking(
+        [jogo_mais_views, jogo_mais_engajamento],
+        [video_mais_views, video_mais_engajamento],
+        canais,
+    )
+
+    assert ranking[0].jogo.nome == "Game Mais Engajamento"
+
 
 if __name__ == "__main__":
     unittest.main()
