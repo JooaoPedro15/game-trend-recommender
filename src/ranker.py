@@ -117,6 +117,12 @@ def _calcular_tendencia_bruta(
 def _score_video(video: VideoColetado) -> float:
     return video.views + video.likes * 5 + video.comentarios * 20
 
+def _calcular_taxa_engajamento(video: VideoColetado) -> float:
+    if video.views <= 0:
+        return 0.0
+
+    return (video.likes + video.comentarios) / video.views
+
 
 def _calcular_peso_recencia(data_publicacao: str) -> float:
     try:
