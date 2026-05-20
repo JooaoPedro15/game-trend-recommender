@@ -115,7 +115,10 @@ def _calcular_tendencia_bruta(
 
 
 def _score_video(video: VideoColetado) -> float:
-    return video.views + video.likes * 5 + video.comentarios * 20
+    taxa_engajamento = _calcular_taxa_engajamento(video)
+    bonus_engajamento = video.views * taxa_engajamento * 2
+
+    return video.views + video.likes * 5 + video.comentarios * 20 + bonus_engajamento
 
 def _calcular_taxa_engajamento(video: VideoColetado) -> float:
     if video.views <= 0:
