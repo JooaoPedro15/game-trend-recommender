@@ -1,6 +1,7 @@
 from collections import defaultdict
 from unicodedata import combining, normalize
 from datetime import date
+from metricas_video import calcular_taxa_engajamento
 
 from detector_jogo import detectar_jogos_no_video
 from modelos import (
@@ -115,16 +116,10 @@ def _calcular_tendencia_bruta(
 
 
 def _score_video(video: VideoColetado) -> float:
-    taxa_engajamento = _calcular_taxa_engajamento(video)
+    taxa_engajamento = calcular_taxa_engajamento(video)
     bonus_engajamento = video.views * taxa_engajamento * 2
 
     return video.views + video.likes * 5 + video.comentarios * 20 + bonus_engajamento
-
-def _calcular_taxa_engajamento(video: VideoColetado) -> float:
-    if video.views <= 0:
-        return 0.0
-
-    return (video.likes + video.comentarios) / video.views
 
 
 def _calcular_peso_recencia(data_publicacao: str) -> float:
@@ -260,7 +255,7 @@ def _tem_video_recente(videos: list[VideoColetado]) -> bool:
 # Verifica se algum video teve uma taxa de engajamento alta.
 def _tem_engajamento_alto(videos: list[VideoColetado]) -> bool:
     for video in videos:
-        taxa_engajamento = _calcular_taxa_engajamento(video)
+        taxa_engajamento = calcular_taxa_engajamento(video)
 
         if video.views >= 10000 and taxa_engajamento >= 0.10:
             return True

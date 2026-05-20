@@ -7,6 +7,7 @@ from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletad
 from modelos import VideoColetado
 from ranker import calcular_ranking
 from relatorio import gerar_relatorio_markdown
+from metricas_video import calcular_taxa_engajamento
 
 
 
@@ -82,7 +83,7 @@ def imprimir_ranking(ranking) -> None:
         print()
         print("Videos que influenciaram:")
         for video in resultado.videos:
-          taxa_engajamento = _calcular_taxa_engajamento(video) * 100
+          taxa_engajamento = calcular_taxa_engajamento(video) * 100
 
     print(
         f"- {video.canal} | {video.plataforma} | "
@@ -143,13 +144,6 @@ def _perguntar_data_publicacao() -> str:
     if valor:
         return valor
     return date.today().isoformat()
-
-# Calcula a taxa de engajamento de um video para exibir no ranking.
-def _calcular_taxa_engajamento(video: VideoColetado) -> float:
-    if video.views <= 0:
-        return 0.0
-
-    return (video.likes + video.comentarios) / video.views
 
 
 if __name__ == "__main__":
