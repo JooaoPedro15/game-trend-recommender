@@ -6,11 +6,14 @@ from cadastro_video import VideoDuplicadoError, adicionar_video_csv
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking
+from relatorio import gerar_relatorio_markdown
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
 VIDEOS_CSV = DATA_DIR / "videos_coletados.csv"
+REPORTS_DIR = BASE_DIR / "reports"
+RANKING_REPORT = REPORTS_DIR / "ranking.md"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -24,9 +27,13 @@ def main(argv: list[str] | None = None) -> int:
     if comando == "adicionar_video":
         adicionar_video_interativo()
         return 0
+    
+    if comando == "exportar_ranking":
+       exportar_ranking()
+       return 0
 
     print(f"Comando desconhecido: {comando}")
-    print("Use: python src/main.py [ranking|adicionar_video]")
+    print("Use: python src/main.py [ranking|adicionar_video|exportar_ranking]")
     return 1
 
 
@@ -37,6 +44,17 @@ def mostrar_ranking() -> None:
     ranking = calcular_ranking(jogos, videos, canais)
 
     imprimir_ranking(ranking)
+
+# Exporta o ranking atual para um arquivo Markdown.
+def exportar_ranking() -> None:
+    canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
+    jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
+    videos = ler_videos_coletados(VIDEOS_CSV)
+    ranking = calcular_ranking(jogos, videos, canais)
+
+    gerar_relatorio_markdown(RANKING_REPORT, ranking)
+
+    print(f"Relatorio gerado em: {RANKING_REPORT}")
 
 
 def imprimir_ranking(ranking) -> None:
