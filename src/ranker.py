@@ -1,5 +1,6 @@
 from collections import defaultdict
 from unicodedata import combining, normalize
+from datetime import date
 
 from detector_jogo import detectar_jogos_no_video
 from modelos import (
@@ -106,15 +107,35 @@ def _calcular_tendencia_bruta(
     canais_diferentes = set()
 
     for video in videos:
-        peso_canal = pesos_canais.get(video.canal.casefold(), 1.0)
-        total += _score_video(video) * peso_canal
-        canais_diferentes.add(video.canal)
+     peso_canal = pesos_canais.get(video.canal.casefold(), 1.0)
+     peso_recencia = _calcular_peso_recencia(video.data_publicacao)
 
-    return total + len(canais_diferentes) * 100_000
+    total += _score_video(video) * peso_canal * peso_recencia
+    canais_diferentes.add(video.canal)
 
 
 def _score_video(video: VideoColetado) -> float:
     return video.views + video.likes * 5 + video.comentarios * 20
+
+
+def _calcular_peso_recencia(data_publicacao: str) -> float:
+    try:
+        data_video = date.fromisoformat(data_publicacao)
+    except ValueError:
+        return 1.0
+
+    dias = (date.today() - data_video).days
+
+    if dias <= 7:
+        return 1.3
+
+    if dias <= 30:
+        return 1.1
+
+    if dias <= 90:
+        return 0.9
+
+    return 0.6
 
 
 def _calcular_score_descoberta(videos: list[VideoColetado]) -> float:
