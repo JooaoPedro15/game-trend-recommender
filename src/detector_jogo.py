@@ -1,5 +1,6 @@
 import re
 
+from unicodedata import combining, normalize 
 from modelos import JogoSeed, VideoColetado
 
 
@@ -32,6 +33,19 @@ def _termos_do_jogo(jogo: JogoSeed) -> list[str]:
 
 
 def _termo_aparece(texto: str, termo: str) -> bool:
-    # Evita que aliases curtos como "mine" sejam detectados dentro de palavras maiores.
-    padrao = rf"(?<![A-Za-z0-9]){re.escape(termo)}(?![A-Za-z0-9])"
-    return re.search(padrao, texto, flags=re.IGNORECASE) is not None
+    texto_normalizado = _normalizar_texto(texto)
+    termo_normalizado = _normalizar_texto(termo)
+
+    padrao = rf"(?<![A-Za-z0-9]){re.escape(termo_normalizado)}(?![A-Za-z0-9])"
+
+    return re.search(padrao, texto_normalizado) is not None
+
+
+def _normalizar_texto(texto: str) -> str:
+    texto_sem_acento = "".join(
+        caractere
+        for caractere in normalize("NFKD", texto)
+        if not combining(caractere)
+    )
+
+    return texto_sem_acento.casefold()

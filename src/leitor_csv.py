@@ -49,7 +49,12 @@ def ler_videos_coletados(caminho: str | Path) -> list[VideoColetado]:
 
 
 def _ler_linhas(caminho: str | Path) -> list[dict[str, str]]:
-    with Path(caminho).open("r", encoding="utf-8-sig", newline="") as arquivo:
+    caminho = Path(caminho)
+
+    if not caminho.exists() or caminho.stat().st_size == 0:
+        return []
+
+    with caminho.open("r", encoding="utf-8-sig", newline="") as arquivo:
         return list(csv.DictReader(arquivo))
 
 
