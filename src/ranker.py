@@ -201,8 +201,14 @@ def _gerar_motivo(
     tem_varios_canais = canais_diferentes > 1
     tem_fit_alto = jogo.fit_inicial >= 8
     tem_poucos_canais = score_saturacao >= 75
-
     tem_video_recente = _tem_video_recente(videos)
+    tem_engajamento_alto = _tem_engajamento_alto(videos)
+
+    if tem_engajamento_alto and tem_video_recente:
+     return "Jogo apareceu em video recente com alto engajamento, indicando interesse atual do publico."
+
+    if tem_engajamento_alto and tem_alta_performance:
+     return "Jogo teve alto engajamento em videos coletados, indicando forte interesse do publico."
 
     if tem_video_recente and tem_alta_performance:
      return "Jogo apareceu em videos recentes com boa performance, indicando tendencia atual."
@@ -247,6 +253,16 @@ def _tem_video_recente(videos: list[VideoColetado]) -> bool:
         dias = (date.today() - data_video).days
 
         if dias <= 7:
+            return True
+
+    return False
+
+# Verifica se algum video teve uma taxa de engajamento alta.
+def _tem_engajamento_alto(videos: list[VideoColetado]) -> bool:
+    for video in videos:
+        taxa_engajamento = _calcular_taxa_engajamento(video)
+
+        if video.views >= 10000 and taxa_engajamento >= 0.10:
             return True
 
     return False
