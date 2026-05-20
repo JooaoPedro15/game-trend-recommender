@@ -1,5 +1,5 @@
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv
@@ -7,6 +7,7 @@ from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletad
 from modelos import VideoColetado
 from ranker import calcular_ranking
 from relatorio import gerar_relatorio_markdown
+
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -45,16 +46,19 @@ def mostrar_ranking() -> None:
 
     imprimir_ranking(ranking)
 
-# Exporta o ranking atual para um arquivo Markdown.
+# Exporta o ranking atual para um arquivo Markdown com data e hora.
 def exportar_ranking() -> None:
     canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     videos = ler_videos_coletados(VIDEOS_CSV)
     ranking = calcular_ranking(jogos, videos, canais)
 
-    gerar_relatorio_markdown(RANKING_REPORT, ranking)
+    data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    caminho_relatorio = REPORTS_DIR / f"ranking_{data_hora}.md"
 
-    print(f"Relatorio gerado em: {RANKING_REPORT}")
+    gerar_relatorio_markdown(caminho_relatorio, ranking)
+
+    print(f"Relatorio gerado em: {caminho_relatorio}")
 
 
 def imprimir_ranking(ranking) -> None:
