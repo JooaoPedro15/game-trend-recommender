@@ -60,13 +60,16 @@ def imprimir_ranking(ranking) -> None:
         print()
         print("Videos que influenciaram:")
         for video in resultado.videos:
-            print(
-                f"- {video.canal} | {video.plataforma} | "
-                f"{video.views} views | {video.titulo}"
-            )
-            print(f"  {video.url}")
-        print()
+          taxa_engajamento = _calcular_taxa_engajamento(video) * 100
 
+    print(
+        f"- {video.canal} | {video.plataforma} | "
+        f"{video.views} views | {video.likes} likes | "
+        f"{video.comentarios} comentarios | "
+        f"{taxa_engajamento:.1f}% engajamento | "
+        f"{video.data_publicacao} | {video.titulo}"
+    )
+    print(f"  {video.url}")
 
 def adicionar_video_interativo() -> None:
     print("=== Adicionar Video Manual ===")
@@ -118,6 +121,13 @@ def _perguntar_data_publicacao() -> str:
     if valor:
         return valor
     return date.today().isoformat()
+
+# Calcula a taxa de engajamento de um video para exibir no ranking.
+def _calcular_taxa_engajamento(video: VideoColetado) -> float:
+    if video.views <= 0:
+        return 0.0
+
+    return (video.likes + video.comentarios) / video.views
 
 
 if __name__ == "__main__":
