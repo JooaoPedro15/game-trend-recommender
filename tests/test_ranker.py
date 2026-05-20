@@ -11,6 +11,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from modelos import CanalReferencia, JogoSeed, VideoColetado
 from ranker import calcular_ranking
 from main import imprimir_ranking
+from datetime import date, timedelta
+
 
 
 class TestRanker(unittest.TestCase):
@@ -150,6 +152,67 @@ class TestRanker(unittest.TestCase):
         self.assertIn("Videos que influenciaram:", texto)
         self.assertIn("Core | youtube | 800000 views | Esse jogo de terror me quebrou", texto)
         self.assertIn("https://youtube.com/shorts/exemplo", texto)
+
+# Testa se videos recentes influenciam mais o ranking que videos antigos.
+def test_ranking_prioriza_video_mais_recente():
+    hoje = date.today()
+    data_recente = hoje.isoformat()
+    data_antiga = (hoje - timedelta(days=120)).isoformat()
+
+    jogo_recente = JogoSeed(
+        nome="Game Recente",
+        aliases=[],
+        genero="terror",
+        fit_inicial=8.0,
+    )
+
+    jogo_antigo = JogoSeed(
+        nome="Game Antigo",
+        aliases=[],
+        genero="terror",
+        fit_inicial=8.0,
+    )
+
+    video_recente = VideoColetado(
+        titulo="Game Recente viralizou",
+        canal="Canal Teste",
+        plataforma="YouTube",
+        url="https://youtube.com/recente",
+        views=100000,
+        likes=10000,
+        comentarios=500,
+        data_publicacao=data_recente,
+        texto_comentarios="",
+    )
+
+    video_antigo = VideoColetado(
+        titulo="Game Antigo viralizou",
+        canal="Canal Teste",
+        plataforma="YouTube",
+        url="https://youtube.com/antigo",
+        views=100000,
+        likes=10000,
+        comentarios=500,
+        data_publicacao=data_antiga,
+        texto_comentarios="",
+    )
+
+    canais = [
+        CanalReferencia(
+            nome="Canal Teste",
+            plataforma="YouTube",
+            url="https://youtube.com/canal",
+            peso=1.0,
+        )
+    ]
+
+    ranking = calcular_ranking(
+        [jogo_recente, jogo_antigo],
+        [video_recente, video_antigo],
+        canais,
+    )
+
+    assert ranking[0].jogo.nome == "Game Recente"
 
 
 if __name__ == "__main__":
