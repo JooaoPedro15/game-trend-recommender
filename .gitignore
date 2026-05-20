@@ -28,6 +28,10 @@ credentials*.json
 token*.json
 
 # Manual/private data that should not go to a public repo
+AGENTS.md
+agents.md
+docs/publicacao_github.md
+publicacao_github.md
 data/raw/
 data/private/
 data/privado/
@@ -50,3 +54,4 @@ Thumbs.db
 .idea/
 *.log
 logs/
+
