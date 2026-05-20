@@ -57,6 +57,30 @@ class TestDetectorJogo(unittest.TestCase):
 
         self.assertEqual([j.nome for j in encontrados], ["Content Warning"])
 
+def test_detecta_jogo_pelo_texto_dos_comentarios():
+    jogo = JogoSeed(
+        nome="Schedule I",
+        aliases=["schedule 1", "schedule one"],
+        genero="simulador",
+        fit_inicial=9.0,
+    )
+
+    video = VideoColetado(
+        titulo="Esse jogo viralizou do nada",
+        canal="Canal Teste",
+        plataforma="YouTube",
+        url="https://youtube.com/teste",
+        views=100000,
+        likes=10000,
+        comentarios=500,
+        data_publicacao="2026-05-20",
+        texto_comentarios="qual o nome do jogo? schedule 1?",
+    )
+
+    resultado = detectar_jogos_no_video(video, [jogo])
+
+    assert resultado == [jogo]
+
 
 if __name__ == "__main__":
     unittest.main()
