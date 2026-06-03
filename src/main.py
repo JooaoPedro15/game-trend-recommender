@@ -1,4 +1,4 @@
-import sys
+import argparse
 from datetime import date, datetime
 from pathlib import Path
 
@@ -19,15 +19,12 @@ RANKING_REPORT = REPORTS_DIR / "ranking.md"
 
 
 def main(argv: list[str] | None = None) -> int:
-    argumentos = sys.argv[1:] if argv is None else argv
-    comando = argumentos[0] if argumentos else "ranking"
-    plataforma = _ler_argumento(argumentos, "--plataforma")
+    parser = _construir_parser()
+    args = parser.parse_args(argv)
 
-    try:
-        top = _ler_top(argumentos)
-    except ValueError as erro:
-        print(f"Erro: {erro}")
-        return 1
+    comando = args.comando or "ranking"
+    plataforma = getattr(args, "plataforma", None)
+    top = getattr(args, "top", None)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top)
@@ -41,9 +38,7 @@ def main(argv: list[str] | None = None) -> int:
         exportar_ranking(plataforma, top)
         return 0
 
-    print(f"Comando desconhecido: {comando}")
-    print("Use: python src/main.py [ranking|adicionar_video|exportar_ranking] [--plataforma NOME] [--top N]")
-    return 1
+    return 0
 
 
 # Le os dados, aplica o filtro de plataforma e o limite Top N (se houver) e retorna o ranking.
@@ -159,29 +154,48 @@ def _perguntar_data_publicacao() -> str:
     return date.today().isoformat()
 
 
-# Le o valor de um argumento simples no formato "--chave valor".
-def _ler_argumento(argumentos: list[str], chave: str) -> str | None:
-    if chave not in argumentos:
-        return None
-    indice = argumentos.index(chave)
-    if indice + 1 < len(argumentos):
-        return argumentos[indice + 1]
-    return None
-
-
-# Le e valida o argumento "--top N". Retorna None se ausente; levanta ValueError se invalido.
-def _ler_top(argumentos: list[str]) -> int | None:
-    valor = _ler_argumento(argumentos, "--top")
-    if valor is None:
-        return None
-    erro = f"Valor invalido para --top: {valor}. Use um numero inteiro positivo."
+# Valida o argumento --top: precisa ser um inteiro positivo.
+def _top_valido(valor: str) -> int:
     try:
         numero = int(valor)
     except ValueError:
-        raise ValueError(erro)
+        raise argparse.ArgumentTypeError(f"valor invalido para --top: {valor}")
     if numero <= 0:
-        raise ValueError(erro)
+        raise argparse.ArgumentTypeError(f"--top deve ser um inteiro positivo: {valor}")
     return numero
+
+
+# Adiciona os filtros comuns (--plataforma e --top) a um subcomando.
+def _adicionar_filtros(subparser: argparse.ArgumentParser) -> None:
+    subparser.add_argument(
+        "--plataforma",
+        help="Filtra os videos por plataforma (ex: YouTube, TikTok). Ignora maiusculas.",
+    )
+    subparser.add_argument(
+        "--top",
+        type=_top_valido,
+        help="Mostra apenas os N jogos com maior score.",
+    )
+
+
+# Monta o parser de argumentos do CLI, com um subcomando para cada acao.
+def _construir_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Recomenda games com potencial para Shorts, Reels e TikTok.",
+    )
+    subcomandos = parser.add_subparsers(dest="comando")
+
+    ranking = subcomandos.add_parser("ranking", help="Mostra o ranking no terminal.")
+    _adicionar_filtros(ranking)
+
+    exportar = subcomandos.add_parser(
+        "exportar_ranking", help="Exporta o ranking para um arquivo Markdown."
+    )
+    _adicionar_filtros(exportar)
+
+    subcomandos.add_parser("adicionar_video", help="Cadastra um video manualmente.")
+
+    return parser
 
 
 # Mantem apenas os videos da plataforma informada, ignorando maiusculas/minusculas.
