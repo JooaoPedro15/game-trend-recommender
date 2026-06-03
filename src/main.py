@@ -23,8 +23,14 @@ def main(argv: list[str] | None = None) -> int:
     comando = argumentos[0] if argumentos else "ranking"
     plataforma = _ler_argumento(argumentos, "--plataforma")
 
+    try:
+        top = _ler_top(argumentos)
+    except ValueError as erro:
+        print(f"Erro: {erro}")
+        return 1
+
     if comando == "ranking":
-        mostrar_ranking(plataforma)
+        mostrar_ranking(plataforma, top)
         return 0
 
     if comando == "adicionar_video":
@@ -32,31 +38,34 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     
     if comando == "exportar_ranking":
-        exportar_ranking(plataforma)
+        exportar_ranking(plataforma, top)
         return 0
 
     print(f"Comando desconhecido: {comando}")
-    print("Use: python src/main.py [ranking|adicionar_video|exportar_ranking] [--plataforma NOME]")
+    print("Use: python src/main.py [ranking|adicionar_video|exportar_ranking] [--plataforma NOME] [--top N]")
     return 1
 
 
-# Le os dados, aplica o filtro de plataforma (se houver) e retorna o ranking calculado.
-def _carregar_ranking(plataforma: str | None = None):
+# Le os dados, aplica o filtro de plataforma e o limite Top N (se houver) e retorna o ranking.
+def _carregar_ranking(plataforma: str | None = None, top: int | None = None):
     canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     videos = ler_videos_coletados(VIDEOS_CSV)
     if plataforma:
         videos = _filtrar_por_plataforma(videos, plataforma)
-    return calcular_ranking(jogos, videos, canais)
+    ranking = calcular_ranking(jogos, videos, canais)
+    if top is not None:
+        ranking = ranking[:top]
+    return ranking
 
 
-def mostrar_ranking(plataforma: str | None = None) -> None:
-    ranking = _carregar_ranking(plataforma)
+def mostrar_ranking(plataforma: str | None = None, top: int | None = None) -> None:
+    ranking = _carregar_ranking(plataforma, top)
     imprimir_ranking(ranking)
 
 # Exporta o ranking atual para um arquivo Markdown com data e hora.
-def exportar_ranking(plataforma: str | None = None) -> None:
-    ranking = _carregar_ranking(plataforma)
+def exportar_ranking(plataforma: str | None = None, top: int | None = None) -> None:
+    ranking = _carregar_ranking(plataforma, top)
 
     data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
     caminho_relatorio = REPORTS_DIR / f"ranking_{data_hora}.md"
@@ -158,6 +167,21 @@ def _ler_argumento(argumentos: list[str], chave: str) -> str | None:
     if indice + 1 < len(argumentos):
         return argumentos[indice + 1]
     return None
+
+
+# Le e valida o argumento "--top N". Retorna None se ausente; levanta ValueError se invalido.
+def _ler_top(argumentos: list[str]) -> int | None:
+    valor = _ler_argumento(argumentos, "--top")
+    if valor is None:
+        return None
+    erro = f"Valor invalido para --top: {valor}. Use um numero inteiro positivo."
+    try:
+        numero = int(valor)
+    except ValueError:
+        raise ValueError(erro)
+    if numero <= 0:
+        raise ValueError(erro)
+    return numero
 
 
 # Mantem apenas os videos da plataforma informada, ignorando maiusculas/minusculas.
