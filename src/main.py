@@ -40,24 +40,23 @@ def main(argv: list[str] | None = None) -> int:
     return 1
 
 
-def mostrar_ranking(plataforma: str | None = None) -> None:
+# Le os dados, aplica o filtro de plataforma (se houver) e retorna o ranking calculado.
+def _carregar_ranking(plataforma: str | None = None):
     canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     videos = ler_videos_coletados(VIDEOS_CSV)
     if plataforma:
         videos = _filtrar_por_plataforma(videos, plataforma)
-    ranking = calcular_ranking(jogos, videos, canais)
+    return calcular_ranking(jogos, videos, canais)
 
+
+def mostrar_ranking(plataforma: str | None = None) -> None:
+    ranking = _carregar_ranking(plataforma)
     imprimir_ranking(ranking)
 
 # Exporta o ranking atual para um arquivo Markdown com data e hora.
 def exportar_ranking(plataforma: str | None = None) -> None:
-    canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
-    jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
-    videos = ler_videos_coletados(VIDEOS_CSV)
-    if plataforma:
-        videos = _filtrar_por_plataforma(videos, plataforma)
-    ranking = calcular_ranking(jogos, videos, canais)
+    ranking = _carregar_ranking(plataforma)
 
     data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
     caminho_relatorio = REPORTS_DIR / f"ranking_{data_hora}.md"
