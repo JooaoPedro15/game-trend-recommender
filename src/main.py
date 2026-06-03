@@ -43,13 +43,25 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-# Le os dados, aplica os filtros de plataforma e data e o limite Top N (se houver) e retorna o ranking.
+# Le os CSVs de dados e delega para _montar_ranking (separa I/O de disco da logica pura).
 def _carregar_ranking(
     plataforma: str | None = None, top: int | None = None, desde: date | None = None
 ):
     canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     videos = ler_videos_coletados(VIDEOS_CSV)
+    return _montar_ranking(jogos, videos, canais, plataforma, top, desde)
+
+
+# Aplica os filtros de plataforma e data e o limite Top N (se houver) e retorna o ranking.
+def _montar_ranking(
+    jogos,
+    videos,
+    canais,
+    plataforma: str | None = None,
+    top: int | None = None,
+    desde: date | None = None,
+):
     if plataforma:
         videos = _filtrar_por_plataforma(videos, plataforma)
     if desde is not None:
