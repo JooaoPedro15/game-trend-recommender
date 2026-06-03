@@ -1,171 +1,187 @@
 # Game Trend Recommender
 
-MVP local para recomendar games com potencial para Shorts, Reels e TikTok do canal Roberto Careca.
+A local, file-based MVP that ranks games by their potential for short-form video
+(YouTube Shorts, Reels, TikTok) on the Roberto Careca channel.
 
-Nesta versao, o projeto nao faz scraping, nao usa APIs externas, nao usa banco de dados e nao usa IA. A ideia e testar o cerebro do ranking com arquivos CSV preenchidos manualmente.
+## Problem
 
-## Como rodar o ranking
+Game-focused creators constantly need to decide **which game to record next**.
+Catching a game while it is still rising — before it saturates — is hard to do by
+hand across many channels and platforms. This tool turns manually collected video
+data into a ranked, **explainable** shortlist of games worth covering.
 
-Use Python 3.10+.
+It is an early MVP and a future building block of a larger "Creator Intelligence Platform".
 
-```bash
-python src/main.py
-```
+## Current features
 
-Ou:
+- Ranks games from manually collected video data (CSV files).
+- Detects games in video titles and comments by name and aliases.
+- Explainable scoring: each game shows the videos and signals behind its rank.
+- Filters for `ranking` / `exportar_ranking`: platform (`--plataforma`),
+  publication date (`--desde`), and top-N (`--top`).
+- Report export to **Markdown** or **CSV**, timestamped under `reports/`.
+- Manual video registration through the CLI, with duplicate-URL protection.
 
-```bash
-python src/main.py ranking
-```
+No scraping, no external APIs, no database, no AI — **yet**. Data is filled in by hand
+on purpose, to validate the ranking "brain" before automating collection.
 
-Os dois comandos leem os CSVs em `data/`, detectam os jogos citados nos videos e mostram o ranking ordenado por score final.
+## Tech stack
 
-## Como cadastrar video manualmente
+- **Python 3.10+** — standard library only at runtime (no third-party dependencies).
+- **argparse** for the command-line interface.
+- **pytest** for the test suite (dev-only dependency).
 
-Use:
-
-```bash
-python src/main.py adicionar_video
-```
-
-O terminal vai pedir:
-
-- `titulo`
-- `canal`
-- `plataforma`
-- `url`
-- `views`
-- `likes`
-- `comentarios`
-- `data_publicacao`
-- `texto_comentarios`
-
-Regras do cadastro:
-
-- `titulo`, `canal`, `plataforma` e `url` sao obrigatorios.
-- `views`, `likes` e `comentarios` devem ser numeros inteiros.
-- Se `data_publicacao` ficar vazia, o sistema usa a data atual no formato `YYYY-MM-DD`.
-- O sistema nao permite cadastrar duas linhas com a mesma URL.
-
-## Como rodar os testes
-
-```bash
-python -m unittest discover tests
-```
-
-## Estrutura
+## Project structure
 
 ```text
 game-trend-recommender/
-|-- data/
+|-- data/                      # input CSVs (filled manually)
 |   |-- canais_referencia.csv
 |   |-- jogos_seed.csv
 |   `-- videos_coletados.csv
 |-- src/
-|   |-- main.py
-|   |-- cadastro_video.py
-|   |-- leitor_csv.py
-|   |-- detector_jogo.py
-|   |-- ranker.py
-|   `-- modelos.py
-|-- tests/
-|   |-- test_cadastro_video.py
-|   |-- test_detector_jogo.py
-|   `-- test_ranker.py
+|   |-- main.py                # CLI (argparse): ranking, exportar_ranking, adicionar_video
+|   |-- ranker.py              # ranking calculation
+|   |-- detector_jogo.py       # game detection by name / alias
+|   |-- leitor_csv.py          # CSV reading
+|   |-- cadastro_video.py      # manual video registration
+|   |-- metricas_video.py      # engagement metric (single source of truth)
+|   |-- relatorio.py           # Markdown / CSV report generation
+|   `-- modelos.py             # dataclasses (VideoColetado, JogoSeed, ...)
+|-- tests/                     # pytest suite
+|-- reports/                   # generated reports (Markdown / CSV)
 |-- docs/
 |   `-- publicacao_github.md
 |-- README.md
 `-- requirements.txt
 ```
 
-## Como preencher canais_referencia.csv
+## How to run
 
-Arquivo: `data/canais_referencia.csv`
+Requires Python 3.10+. No installation step — the runtime uses the standard library only.
 
-Colunas:
-
-```csv
-nome,plataforma,url,peso
+```bash
+python src/main.py            # defaults to "ranking"
+python src/main.py ranking
 ```
 
-Exemplo:
+Both read the CSVs in `data/`, detect the games mentioned in the videos, and print the
+ranking ordered by final score.
 
-```csv
-Canal Referencia 1,youtube,https://youtube.com/@canal1,1.0
-Canal Referencia 2,tiktok,https://tiktok.com/@canal2,1.2
+## CLI commands
+
+| Command | What it does |
+|---------|--------------|
+| `ranking` | Print the ranking in the terminal (default when no command is given). |
+| `exportar_ranking` | Export the ranking to a timestamped file in `reports/`. |
+| `adicionar_video` | Register a video manually (interactive prompts). |
+
+Shared options for `ranking` and `exportar_ranking`:
+
+| Option | Description |
+|--------|-------------|
+| `--plataforma NAME` | Keep only videos from a platform (case-insensitive). |
+| `--desde YYYY-MM-DD` | Keep only videos published on or after this date. |
+| `--top N` | Show only the top N games (positive integer). |
+
+Extra option for `exportar_ranking` only:
+
+| Option | Description |
+|--------|-------------|
+| `--formato {md,csv}` | Output format (default: `md`). |
+
+Run `python src/main.py --help` or `python src/main.py <command> --help` for the
+auto-generated help.
+
+## Example usage
+
+```bash
+# Full ranking in the terminal
+python src/main.py ranking
+
+# Top 5 YouTube games published since May 1st
+python src/main.py ranking --plataforma YouTube --desde 2026-05-01 --top 5
+
+# Export the top 10 games to CSV
+python src/main.py exportar_ranking --top 10 --formato csv
+
+# Register a video manually
+python src/main.py adicionar_video
 ```
 
-O campo `peso` permite dar mais importancia para canais que historicamente antecipam tendencias ou parecem mais parecidos com o publico do Roberto Careca. Use `1.0` como padrao.
+### Registering a video
 
-## Como preencher jogos_seed.csv
+`adicionar_video` prompts for: `titulo`, `canal`, `plataforma`, `url`, `views`,
+`likes`, `comentarios`, `data_publicacao`, `texto_comentarios`.
 
-Arquivo: `data/jogos_seed.csv`
+Rules:
+- `titulo`, `canal`, `plataforma`, `url` are required.
+- `views`, `likes`, `comentarios` must be integers.
+- An empty `data_publicacao` defaults to today (`YYYY-MM-DD`).
+- Duplicate URLs are rejected.
 
-Colunas:
+## Data files
 
-```csv
-nome,aliases,genero,fit_inicial
-```
+All inputs live in `data/` as CSV.
 
-Use `|` para separar aliases:
+**`canais_referencia.csv`** — `nome,plataforma,url,peso`
+`peso` weights channels that tend to anticipate trends or match the channel's audience.
+Use `1.0` as the default.
 
-```csv
-R.E.P.O.,repo|r.e.p.o|repo game,horror engracado,9
-```
+**`jogos_seed.csv`** — `nome,aliases,genero,fit_inicial`
+Separate aliases with `|` (e.g. `R.E.P.O.,repo|r.e.p.o|repo game,horror engracado,9`).
+`fit_inicial` (0–10) is how well the game fits the channel before any trend data.
 
-O campo `fit_inicial` vai de 0 a 10 e representa o quanto o jogo parece combinar com o canal antes dos dados de tendencia.
+**`videos_coletados.csv`** — `titulo,canal,plataforma,url,views,likes,comentarios,data_publicacao,texto_comentarios`
+The detector searches names/aliases in `titulo` and `texto_comentarios`. For better
+results, copy "discovery" signals from the comments, such as: `qual nome`, `que jogo`,
+`what game`, `game name`, `onde baixa`, `tem na steam`, `link do jogo`.
 
-## Como preencher videos_coletados.csv
-
-Arquivo: `data/videos_coletados.csv`
-
-Colunas:
-
-```csv
-titulo,canal,plataforma,url,views,likes,comentarios,data_publicacao,texto_comentarios
-```
-
-O detector procura nomes e aliases no `titulo` e em `texto_comentarios`. Para bons resultados, copie sinais de curiosidade dos comentarios, como:
-
-- `qual nome`
-- `nome?`
-- `que jogo`
-- `what game`
-- `game name`
-- `onde baixa`
-- `tem na steam`
-- `link do jogo`
-
-## Como interpretar o score
-
-A formula inicial e:
+## Ranking logic overview
 
 ```text
 score_final =
-score_tendencia * 0.40 +
-score_fit_canal * 0.35 +
-score_descoberta * 0.15 +
-score_saturacao * 0.10
+    score_tendencia  * 0.40 +
+    score_fit_canal  * 0.35 +
+    score_descoberta * 0.15 +
+    score_saturacao  * 0.10
 ```
 
-- `score_tendencia`: considera views, likes, comentarios, peso do canal e quantidade de canais diferentes.
-- `score_fit_canal`: transforma `fit_inicial` de 0-10 para 0-100.
-- `score_descoberta`: aumenta quando comentarios perguntam o nome do jogo ou onde encontrar.
-- `score_saturacao`: favorece jogos que ainda aparecem em poucos canais, para tentar capturar oportunidades antes de saturarem.
+- **score_tendencia** — views, likes, comments, channel weight, recency, and the number
+  of distinct channels.
+- **score_fit_canal** — `fit_inicial` (0–10) rescaled to 0–100.
+- **score_descoberta** — higher when comments ask the game's name or where to find it.
+- **score_saturacao** — favors games still seen on few channels (catch them before saturation).
 
-O ranking tambem mostra os videos que influenciaram cada jogo. Isso ajuda a conferir se o score veio de um video forte, de varios canais ou de comentarios de curiosidade.
+The ranking also lists the videos behind each game, so you can check whether a score came
+from one strong video, several channels, or curiosity in the comments.
 
-## Cuidados para repositorio publico
+## Testing
 
-Este projeto tem um `.gitignore` preparado para bloquear caches, ambientes locais, arquivos `.env`, segredos e pastas de dados privados.
+```bash
+python -m pytest
+```
 
-Mantenha os CSVs versionados como exemplos ficticios ou dados que voce aceita publicar. Para dados reais de pesquisa, use arquivos locais como `data/videos_coletados.local.csv` ou pastas como `data/private/`, que nao devem subir para o GitHub.
+`pytest` is the only development dependency; the runtime itself stays standard-library only.
 
-Veja o checklist em `docs/publicacao_github.md` antes de fazer push.
+## Public-repository notes
 
-## Proximos passos
+The `.gitignore` blocks caches, local environments, `.env`, secrets, and private data
+folders. Keep the committed CSVs as fictional examples or data you are comfortable
+publishing. For real research data, use local files such as `data/videos_coletados.local.csv`
+or a `data/private/` folder that stays out of Git. See `docs/publicacao_github.md` before
+pushing.
 
-- Ajustar pesos da formula depois de comparar rankings com resultados reais do canal.
-- Melhorar o peso de recencia usando `data_publicacao`.
-- Exportar o ranking para CSV ou Markdown.
-- Sprint 2: automatizar coleta do YouTube, ainda com cuidado para separar dados privados dos exemplos publicos.
+## Roadmap
+
+- Tune the formula weights after comparing rankings with real channel results.
+- Per-video CSV export (the CSV currently has one row per game).
+- **Sprint 2:** automate YouTube collection, keeping private data separate from public examples.
+- Longer term, the project may grow into scraping, a dashboard, and AI-assisted analysis.
+
+## Project status
+
+Early MVP under active development. Data is collected and registered **manually** — there
+is no scraping or external API yet. The current focus is validating the ranking logic from
+hand-filled CSVs before automating data collection, so the project is pre-1.0 and still
+stabilizing.
