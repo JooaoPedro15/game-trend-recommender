@@ -25,9 +25,10 @@ def main(argv: list[str] | None = None) -> int:
     comando = args.comando or "ranking"
     plataforma = getattr(args, "plataforma", None)
     top = getattr(args, "top", None)
+    desde = getattr(args, "desde", None)
 
     if comando == "ranking":
-        mostrar_ranking(plataforma, top)
+        mostrar_ranking(plataforma, top, desde)
         return 0
 
     if comando == "adicionar_video":
@@ -35,32 +36,40 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     
     if comando == "exportar_ranking":
-        exportar_ranking(plataforma, top)
+        exportar_ranking(plataforma, top, desde)
         return 0
 
     return 0
 
 
-# Le os dados, aplica o filtro de plataforma e o limite Top N (se houver) e retorna o ranking.
-def _carregar_ranking(plataforma: str | None = None, top: int | None = None):
+# Le os dados, aplica os filtros de plataforma e data e o limite Top N (se houver) e retorna o ranking.
+def _carregar_ranking(
+    plataforma: str | None = None, top: int | None = None, desde: date | None = None
+):
     canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     videos = ler_videos_coletados(VIDEOS_CSV)
     if plataforma:
         videos = _filtrar_por_plataforma(videos, plataforma)
+    if desde is not None:
+        videos = _filtrar_por_data(videos, desde)
     ranking = calcular_ranking(jogos, videos, canais)
     if top is not None:
         ranking = ranking[:top]
     return ranking
 
 
-def mostrar_ranking(plataforma: str | None = None, top: int | None = None) -> None:
-    ranking = _carregar_ranking(plataforma, top)
+def mostrar_ranking(
+    plataforma: str | None = None, top: int | None = None, desde: date | None = None
+) -> None:
+    ranking = _carregar_ranking(plataforma, top, desde)
     imprimir_ranking(ranking)
 
 # Exporta o ranking atual para um arquivo Markdown com data e hora.
-def exportar_ranking(plataforma: str | None = None, top: int | None = None) -> None:
-    ranking = _carregar_ranking(plataforma, top)
+def exportar_ranking(
+    plataforma: str | None = None, top: int | None = None, desde: date | None = None
+) -> None:
+    ranking = _carregar_ranking(plataforma, top, desde)
 
     data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
     caminho_relatorio = REPORTS_DIR / f"ranking_{data_hora}.md"
@@ -165,7 +174,15 @@ def _top_valido(valor: str) -> int:
     return numero
 
 
-# Adiciona os filtros comuns (--plataforma e --top) a um subcomando.
+# Valida o argumento --desde: precisa estar no formato YYYY-MM-DD.
+def _data_valida(valor: str) -> date:
+    try:
+        return date.fromisoformat(valor)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"data invalida (use YYYY-MM-DD): {valor}")
+
+
+# Adiciona os filtros comuns (--plataforma, --top, --desde) a um subcomando.
 def _adicionar_filtros(subparser: argparse.ArgumentParser) -> None:
     subparser.add_argument(
         "--plataforma",
@@ -175,6 +192,11 @@ def _adicionar_filtros(subparser: argparse.ArgumentParser) -> None:
         "--top",
         type=_top_valido,
         help="Mostra apenas os N jogos com maior score.",
+    )
+    subparser.add_argument(
+        "--desde",
+        type=_data_valida,
+        help="Considera apenas videos publicados nesta data ou depois (YYYY-MM-DD).",
     )
 
 
@@ -204,6 +226,21 @@ def _filtrar_por_plataforma(
 ) -> list[VideoColetado]:
     plataforma_alvo = plataforma.casefold()
     return [video for video in videos if video.plataforma.casefold() == plataforma_alvo]
+
+
+# Mantem apenas os videos publicados em "desde" ou depois. Ignora videos com data invalida.
+def _filtrar_por_data(
+    videos: list[VideoColetado], desde: date
+) -> list[VideoColetado]:
+    selecionados = []
+    for video in videos:
+        try:
+            data_video = date.fromisoformat(video.data_publicacao)
+        except ValueError:
+            continue
+        if data_video >= desde:
+            selecionados.append(video)
+    return selecionados
 
 
 if __name__ == "__main__":
