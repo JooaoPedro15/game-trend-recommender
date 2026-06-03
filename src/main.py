@@ -108,16 +108,15 @@ def imprimir_ranking(ranking) -> None:
         print()
         print("Videos que influenciaram:")
         for video in resultado.videos:
-          taxa_engajamento = calcular_taxa_engajamento(video) * 100
-
-    print(
-        f"- {video.canal} | {video.plataforma} | "
-        f"{video.views} views | {video.likes} likes | "
-        f"{video.comentarios} comentarios | "
-        f"{taxa_engajamento:.1f}% engajamento | "
-        f"{video.data_publicacao} | {video.titulo}"
-    )
-    print(f"  {video.url}")
+            taxa_engajamento = calcular_taxa_engajamento(video) * 100
+            print(
+                f"- {video.canal} | {video.plataforma} | "
+                f"{video.views} views | {video.likes} likes | "
+                f"{video.comentarios} comentarios | "
+                f"{taxa_engajamento:.1f}% engajamento | "
+                f"{video.data_publicacao} | {video.titulo}"
+            )
+            print(f"  {video.url}")
 
 def adicionar_video_interativo() -> None:
     print("=== Adicionar Video Manual ===")

@@ -150,7 +150,11 @@ class TestRanker(unittest.TestCase):
 
         texto = saida.getvalue()
         self.assertIn("Videos que influenciaram:", texto)
-        self.assertIn("Core | youtube | 800000 views | Esse jogo de terror me quebrou", texto)
+        self.assertIn(
+            "Core | youtube | 800000 views | 90000 likes | 1200 comentarios | "
+            "11.4% engajamento | 2026-05-18 | Esse jogo de terror me quebrou",
+            texto,
+        )
         self.assertIn("https://youtube.com/shorts/exemplo", texto)
 
 # Testa se videos recentes influenciam mais o ranking que videos antigos.

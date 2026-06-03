@@ -105,14 +105,13 @@ def _calcular_tendencia_bruta(
     videos: list[VideoColetado], pesos_canais: dict[str, float]
 ) -> float:
     total = 0.0
-    canais_diferentes = set()
 
     for video in videos:
-     peso_canal = pesos_canais.get(video.canal.casefold(), 1.0)
-     peso_recencia = _calcular_peso_recencia(video.data_publicacao)
+        peso_canal = pesos_canais.get(video.canal.casefold(), 1.0)
+        peso_recencia = _calcular_peso_recencia(video.data_publicacao)
+        total += _score_video(video) * peso_canal * peso_recencia
 
-    total += _score_video(video) * peso_canal * peso_recencia
-    canais_diferentes.add(video.canal)
+    return total
 
 
 def _score_video(video: VideoColetado) -> float:
