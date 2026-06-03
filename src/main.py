@@ -21,9 +21,10 @@ RANKING_REPORT = REPORTS_DIR / "ranking.md"
 def main(argv: list[str] | None = None) -> int:
     argumentos = sys.argv[1:] if argv is None else argv
     comando = argumentos[0] if argumentos else "ranking"
+    plataforma = _ler_argumento(argumentos, "--plataforma")
 
     if comando == "ranking":
-        mostrar_ranking()
+        mostrar_ranking(plataforma)
         return 0
 
     if comando == "adicionar_video":
@@ -31,27 +32,31 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     
     if comando == "exportar_ranking":
-       exportar_ranking()
-       return 0
+        exportar_ranking(plataforma)
+        return 0
 
     print(f"Comando desconhecido: {comando}")
-    print("Use: python src/main.py [ranking|adicionar_video|exportar_ranking]")
+    print("Use: python src/main.py [ranking|adicionar_video|exportar_ranking] [--plataforma NOME]")
     return 1
 
 
-def mostrar_ranking() -> None:
+def mostrar_ranking(plataforma: str | None = None) -> None:
     canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     videos = ler_videos_coletados(VIDEOS_CSV)
+    if plataforma:
+        videos = _filtrar_por_plataforma(videos, plataforma)
     ranking = calcular_ranking(jogos, videos, canais)
 
     imprimir_ranking(ranking)
 
 # Exporta o ranking atual para um arquivo Markdown com data e hora.
-def exportar_ranking() -> None:
+def exportar_ranking(plataforma: str | None = None) -> None:
     canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     videos = ler_videos_coletados(VIDEOS_CSV)
+    if plataforma:
+        videos = _filtrar_por_plataforma(videos, plataforma)
     ranking = calcular_ranking(jogos, videos, canais)
 
     data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -144,6 +149,24 @@ def _perguntar_data_publicacao() -> str:
     if valor:
         return valor
     return date.today().isoformat()
+
+
+# Le o valor de um argumento simples no formato "--chave valor".
+def _ler_argumento(argumentos: list[str], chave: str) -> str | None:
+    if chave not in argumentos:
+        return None
+    indice = argumentos.index(chave)
+    if indice + 1 < len(argumentos):
+        return argumentos[indice + 1]
+    return None
+
+
+# Mantem apenas os videos da plataforma informada, ignorando maiusculas/minusculas.
+def _filtrar_por_plataforma(
+    videos: list[VideoColetado], plataforma: str
+) -> list[VideoColetado]:
+    plataforma_alvo = plataforma.casefold()
+    return [video for video in videos if video.plataforma.casefold() == plataforma_alvo]
 
 
 if __name__ == "__main__":
