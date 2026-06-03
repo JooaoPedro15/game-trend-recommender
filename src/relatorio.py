@@ -1,3 +1,4 @@
+import csv
 from pathlib import Path
 
 from metricas_video import calcular_taxa_engajamento
@@ -45,3 +46,42 @@ def gerar_relatorio_markdown(caminho: str | Path, ranking) -> None:
             linhas.append("")
 
     caminho.write_text("\n".join(linhas), encoding="utf-8")
+
+
+CAMPOS_CSV = [
+    "posicao",
+    "nome_jogo",
+    "score_final",
+    "score_tendencia",
+    "score_fit_canal",
+    "score_descoberta",
+    "score_saturacao",
+    "videos_encontrados",
+    "canais_diferentes",
+    "motivo",
+]
+
+
+# Gera um relatorio do ranking em CSV, com uma linha por jogo.
+def gerar_relatorio_csv(caminho: str | Path, ranking) -> None:
+    caminho = Path(caminho)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+
+    with caminho.open("w", encoding="utf-8", newline="") as arquivo:
+        escritor = csv.DictWriter(arquivo, fieldnames=CAMPOS_CSV)
+        escritor.writeheader()
+        for posicao, resultado in enumerate(ranking, start=1):
+            escritor.writerow(
+                {
+                    "posicao": posicao,
+                    "nome_jogo": resultado.jogo.nome,
+                    "score_final": resultado.score_final,
+                    "score_tendencia": resultado.score_tendencia,
+                    "score_fit_canal": resultado.score_fit_canal,
+                    "score_descoberta": resultado.score_descoberta,
+                    "score_saturacao": resultado.score_saturacao,
+                    "videos_encontrados": resultado.videos_encontrados,
+                    "canais_diferentes": resultado.canais_diferentes,
+                    "motivo": resultado.motivo,
+                }
+            )

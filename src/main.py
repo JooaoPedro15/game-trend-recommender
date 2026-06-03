@@ -6,7 +6,7 @@ from cadastro_video import VideoDuplicadoError, adicionar_video_csv
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking
-from relatorio import gerar_relatorio_markdown
+from relatorio import gerar_relatorio_csv, gerar_relatorio_markdown
 from metricas_video import calcular_taxa_engajamento
 
 
@@ -26,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     plataforma = getattr(args, "plataforma", None)
     top = getattr(args, "top", None)
     desde = getattr(args, "desde", None)
+    formato = getattr(args, "formato", "md")
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -36,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     
     if comando == "exportar_ranking":
-        exportar_ranking(plataforma, top, desde)
+        exportar_ranking(plataforma, top, desde, formato)
         return 0
 
     return 0
@@ -65,16 +66,23 @@ def mostrar_ranking(
     ranking = _carregar_ranking(plataforma, top, desde)
     imprimir_ranking(ranking)
 
-# Exporta o ranking atual para um arquivo Markdown com data e hora.
+# Exporta o ranking atual para um arquivo com data e hora, em Markdown (padrao) ou CSV.
 def exportar_ranking(
-    plataforma: str | None = None, top: int | None = None, desde: date | None = None
+    plataforma: str | None = None,
+    top: int | None = None,
+    desde: date | None = None,
+    formato: str = "md",
 ) -> None:
     ranking = _carregar_ranking(plataforma, top, desde)
 
     data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    caminho_relatorio = REPORTS_DIR / f"ranking_{data_hora}.md"
 
-    gerar_relatorio_markdown(caminho_relatorio, ranking)
+    if formato == "csv":
+        caminho_relatorio = REPORTS_DIR / f"ranking_{data_hora}.csv"
+        gerar_relatorio_csv(caminho_relatorio, ranking)
+    else:
+        caminho_relatorio = REPORTS_DIR / f"ranking_{data_hora}.md"
+        gerar_relatorio_markdown(caminho_relatorio, ranking)
 
     print(f"Relatorio gerado em: {caminho_relatorio}")
 
@@ -214,6 +222,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         "exportar_ranking", help="Exporta o ranking para um arquivo Markdown."
     )
     _adicionar_filtros(exportar)
+    exportar.add_argument(
+        "--formato",
+        choices=["md", "csv"],
+        default="md",
+        help="Formato do arquivo exportado: md ou csv (padrao: md).",
+    )
 
     subcomandos.add_parser("adicionar_video", help="Cadastra um video manualmente.")
 
