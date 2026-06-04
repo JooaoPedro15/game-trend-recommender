@@ -3,6 +3,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv, importar_videos_csv
+from cadastro_jogo import adicionar_alias_jogo
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking
@@ -34,6 +35,8 @@ def main(argv: list[str] | None = None) -> int:
     desde = getattr(args, "desde", None)
     formato = getattr(args, "formato", "md")
     origem = getattr(args, "origem", None)
+    nome = getattr(args, "nome", None)
+    alias = getattr(args, "alias", None)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -57,6 +60,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "videos_sem_jogo":
         videos_sem_jogo_interativo()
+        return 0
+
+    if comando == "adicionar_alias":
+        adicionar_alias_interativo(nome, alias)
         return 0
 
     return 0
@@ -177,6 +184,20 @@ def videos_sem_jogo_interativo() -> None:
     videos = ler_videos_coletados(VIDEOS_CSV)
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     imprimir_videos_sem_jogo(encontrar_videos_sem_jogo(videos, jogos))
+
+
+# Adiciona um alias a um jogo do jogos_seed.csv e informa o resultado.
+def adicionar_alias_interativo(nome_jogo: str, alias: str) -> None:
+    try:
+        adicionado = adicionar_alias_jogo(DATA_DIR / "jogos_seed.csv", nome_jogo, alias)
+    except ValueError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    if adicionado:
+        print(f"Alias '{alias}' adicionado ao jogo '{nome_jogo}'.")
+    else:
+        print(f"O jogo '{nome_jogo}' ja tinha o alias '{alias}'.")
 
 
 def adicionar_video_interativo() -> None:
@@ -303,6 +324,12 @@ def _construir_parser() -> argparse.ArgumentParser:
     subcomandos.add_parser(
         "videos_sem_jogo", help="Lista videos sem nenhum jogo detectado."
     )
+
+    alias_parser = subcomandos.add_parser(
+        "adicionar_alias", help="Adiciona um alias a um jogo do jogos_seed.csv."
+    )
+    alias_parser.add_argument("nome", help="Nome do jogo (ignora maiusculas).")
+    alias_parser.add_argument("alias", help="Alias a adicionar ao jogo.")
 
     return parser
 
