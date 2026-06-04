@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from diagnostico_dados import gerar_diagnostico
+from diagnostico_dados import encontrar_videos_sem_jogo, gerar_diagnostico
 from modelos import JogoSeed, VideoColetado
 
 
@@ -88,3 +88,29 @@ def test_conta_sem_jogo_detectado_e_jogos_detectados():
 
     assert diag.sem_jogo_detectado == 2
     assert diag.jogos_detectados == {"Repo": 2, "Minecraft": 1}
+
+
+# So o video sem jogo aparece; o que casa por alias e excluido.
+def test_videos_sem_jogo_lista_apenas_os_sem_jogo():
+    jogos = [_jogo("R.E.P.O.", ["repo"])]
+    com_jogo = _video(titulo="repo gameplay", url="https://x/1")
+    sem_jogo = _video(titulo="Joguinho misterioso", url="https://x/2")
+
+    resultado = encontrar_videos_sem_jogo([com_jogo, sem_jogo], jogos)
+
+    assert resultado == [sem_jogo]
+
+
+# Os videos sem jogo saem ordenados por views (desc); o que tem jogo nao entra mesmo com mais views.
+def test_videos_sem_jogo_ordena_por_views_desc():
+    jogos = [_jogo("R.E.P.O.", ["repo"])]
+    videos = [
+        _video(titulo="Misterio 1", url="https://x/1", views=10000),
+        _video(titulo="repo gameplay", url="https://x/2", views=999999),
+        _video(titulo="Misterio 2", url="https://x/3", views=500000),
+        _video(titulo="Misterio 3", url="https://x/4", views=50000),
+    ]
+
+    resultado = encontrar_videos_sem_jogo(videos, jogos)
+
+    assert [video.titulo for video in resultado] == ["Misterio 2", "Misterio 3", "Misterio 1"]
