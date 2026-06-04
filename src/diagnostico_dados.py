@@ -80,3 +80,28 @@ def imprimir_diagnostico(diagnostico: DiagnosticoDados) -> None:
         diagnostico.jogos_detectados.items(), key=lambda item: (-item[1], item[0])
     ):
         print(f"  {nome}: {quantidade}")
+
+
+# Retorna os videos sem nenhum jogo detectado, ordenados por views (desc).
+def encontrar_videos_sem_jogo(videos, jogos):
+    sem_jogo = [video for video in videos if not detectar_jogos_no_video(video, jogos)]
+    return sorted(sem_jogo, key=lambda video: video.views, reverse=True)
+
+
+# Mostra no terminal os videos sem jogo detectado, com os dados uteis para achar o alias faltante.
+def imprimir_videos_sem_jogo(videos) -> None:
+    print("=== Videos sem jogo detectado ===")
+    print()
+    if not videos:
+        print("Todos os videos foram associados a algum jogo.")
+        return
+
+    print(f"Total: {len(videos)}")
+    print()
+    for video in videos:
+        print(f"- {video.titulo}")
+        print(f"  Canal: {video.canal} | Plataforma: {video.plataforma} | Views: {video.views}")
+        print(f"  Data: {video.data_publicacao} | URL: {video.url}")
+        if video.texto_comentarios.strip():
+            print(f"  Comentarios: {video.texto_comentarios}")
+        print()

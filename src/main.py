@@ -8,7 +8,12 @@ from modelos import VideoColetado
 from ranker import calcular_ranking
 from relatorio import gerar_relatorio_csv, gerar_relatorio_markdown
 from metricas_video import calcular_taxa_engajamento
-from diagnostico_dados import gerar_diagnostico, imprimir_diagnostico
+from diagnostico_dados import (
+    encontrar_videos_sem_jogo,
+    gerar_diagnostico,
+    imprimir_diagnostico,
+    imprimir_videos_sem_jogo,
+)
 
 
 
@@ -48,6 +53,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "diagnosticar_dados":
         diagnosticar_dados_interativo()
+        return 0
+
+    if comando == "videos_sem_jogo":
+        videos_sem_jogo_interativo()
         return 0
 
     return 0
@@ -161,6 +170,13 @@ def diagnosticar_dados_interativo() -> None:
     videos = ler_videos_coletados(VIDEOS_CSV)
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     imprimir_diagnostico(gerar_diagnostico(videos, jogos))
+
+
+# Le os dados e lista os videos que nao foram associados a nenhum jogo.
+def videos_sem_jogo_interativo() -> None:
+    videos = ler_videos_coletados(VIDEOS_CSV)
+    jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
+    imprimir_videos_sem_jogo(encontrar_videos_sem_jogo(videos, jogos))
 
 
 def adicionar_video_interativo() -> None:
@@ -282,6 +298,10 @@ def _construir_parser() -> argparse.ArgumentParser:
 
     subcomandos.add_parser(
         "diagnosticar_dados", help="Analisa a qualidade dos videos coletados."
+    )
+
+    subcomandos.add_parser(
+        "videos_sem_jogo", help="Lista videos sem nenhum jogo detectado."
     )
 
     return parser
