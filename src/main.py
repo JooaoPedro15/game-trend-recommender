@@ -8,6 +8,7 @@ from modelos import VideoColetado
 from ranker import calcular_ranking
 from relatorio import gerar_relatorio_csv, gerar_relatorio_markdown
 from metricas_video import calcular_taxa_engajamento
+from diagnostico_dados import gerar_diagnostico, imprimir_diagnostico
 
 
 
@@ -43,6 +44,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "importar_videos":
         importar_videos_interativo(origem)
+        return 0
+
+    if comando == "diagnosticar_dados":
+        diagnosticar_dados_interativo()
         return 0
 
     return 0
@@ -149,6 +154,13 @@ def importar_videos_interativo(caminho_origem: str) -> None:
     print(f"Videos importados: {importados}")
     print(f"Duplicados ignorados: {duplicados}")
     print(f"Linhas invalidas: {invalidos}")
+
+
+# Le os dados e mostra um diagnostico da qualidade dos videos coletados.
+def diagnosticar_dados_interativo() -> None:
+    videos = ler_videos_coletados(VIDEOS_CSV)
+    jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
+    imprimir_diagnostico(gerar_diagnostico(videos, jogos))
 
 
 def adicionar_video_interativo() -> None:
@@ -267,6 +279,10 @@ def _construir_parser() -> argparse.ArgumentParser:
         "importar_videos", help="Importa videos em lote de um CSV externo."
     )
     importar.add_argument("origem", help="Caminho do CSV externo a importar.")
+
+    subcomandos.add_parser(
+        "diagnosticar_dados", help="Analisa a qualidade dos videos coletados."
+    )
 
     return parser
 
