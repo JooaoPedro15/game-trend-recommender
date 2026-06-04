@@ -31,21 +31,22 @@ def ler_jogos_seed(caminho: str | Path) -> list[JogoSeed]:
 
 
 def ler_videos_coletados(caminho: str | Path) -> list[VideoColetado]:
-    linhas = _ler_linhas(caminho)
-    return [
-        VideoColetado(
-            titulo=linha.get("titulo", "").strip(),
-            canal=linha.get("canal", "").strip(),
-            plataforma=linha.get("plataforma", "").strip(),
-            url=linha.get("url", "").strip(),
-            views=_para_int(linha.get("views"), 0),
-            likes=_para_int(linha.get("likes"), 0),
-            comentarios=_para_int(linha.get("comentarios"), 0),
-            data_publicacao=linha.get("data_publicacao", "").strip(),
-            texto_comentarios=linha.get("texto_comentarios", "").strip(),
-        )
-        for linha in linhas
-    ]
+    return [linha_para_video(linha) for linha in _ler_linhas(caminho)]
+
+
+# Converte uma linha do CSV (dicionario) em um VideoColetado.
+def linha_para_video(linha: dict[str, str]) -> VideoColetado:
+    return VideoColetado(
+        titulo=linha.get("titulo", "").strip(),
+        canal=linha.get("canal", "").strip(),
+        plataforma=linha.get("plataforma", "").strip(),
+        url=linha.get("url", "").strip(),
+        views=_para_int(linha.get("views"), 0),
+        likes=_para_int(linha.get("likes"), 0),
+        comentarios=_para_int(linha.get("comentarios"), 0),
+        data_publicacao=linha.get("data_publicacao", "").strip(),
+        texto_comentarios=linha.get("texto_comentarios", "").strip(),
+    )
 
 
 def _ler_linhas(caminho: str | Path) -> list[dict[str, str]]:

@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 
-from leitor_csv import ler_videos_coletados
+from leitor_csv import _ler_linhas, ler_videos_coletados, linha_para_video
 from modelos import VideoColetado
 
 
@@ -36,6 +36,33 @@ def adicionar_video_csv(caminho: str | Path, video: VideoColetado) -> None:
     with caminho.open("a", encoding="utf-8", newline="") as arquivo:
         escritor = csv.DictWriter(arquivo, fieldnames=CAMPOS_VIDEO)
         escritor.writerow(_video_para_linha(video))
+
+
+# Importa em lote os videos de um CSV externo para o CSV principal.
+# Retorna (importados, duplicados, invalidos); uma linha invalida nao interrompe o lote.
+def importar_videos_csv(
+    caminho_origem: str | Path, caminho_destino: str | Path
+) -> tuple[int, int, int]:
+    importados = 0
+    duplicados = 0
+    invalidos = 0
+
+    for linha in _ler_linhas(caminho_origem):
+        try:
+            video = linha_para_video(linha)
+        except (ValueError, TypeError):
+            invalidos += 1
+            continue
+
+        try:
+            adicionar_video_csv(caminho_destino, video)
+            importados += 1
+        except VideoDuplicadoError:
+            duplicados += 1
+        except ValueError:
+            invalidos += 1
+
+    return importados, duplicados, invalidos
 
 
 def _garantir_csv(caminho: Path) -> None:

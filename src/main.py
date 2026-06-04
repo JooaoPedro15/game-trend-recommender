@@ -2,7 +2,7 @@ import argparse
 from datetime import date, datetime
 from pathlib import Path
 
-from cadastro_video import VideoDuplicadoError, adicionar_video_csv
+from cadastro_video import VideoDuplicadoError, adicionar_video_csv, importar_videos_csv
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking
@@ -27,6 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     top = getattr(args, "top", None)
     desde = getattr(args, "desde", None)
     formato = getattr(args, "formato", "md")
+    origem = getattr(args, "origem", None)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -38,6 +39,10 @@ def main(argv: list[str] | None = None) -> int:
     
     if comando == "exportar_ranking":
         exportar_ranking(plataforma, top, desde, formato)
+        return 0
+
+    if comando == "importar_videos":
+        importar_videos_interativo(origem)
         return 0
 
     return 0
@@ -129,6 +134,22 @@ def imprimir_ranking(ranking) -> None:
                 f"{video.data_publicacao} | {video.titulo}"
             )
             print(f"  {video.url}")
+
+
+# Importa videos em lote de um CSV externo e mostra o resumo da importacao.
+def importar_videos_interativo(caminho_origem: str) -> None:
+    origem = Path(caminho_origem)
+    if not origem.exists():
+        print(f"Arquivo nao encontrado: {origem}")
+        return
+
+    importados, duplicados, invalidos = importar_videos_csv(origem, VIDEOS_CSV)
+
+    print("=== Importacao de Videos ===")
+    print(f"Videos importados: {importados}")
+    print(f"Duplicados ignorados: {duplicados}")
+    print(f"Linhas invalidas: {invalidos}")
+
 
 def adicionar_video_interativo() -> None:
     print("=== Adicionar Video Manual ===")
@@ -241,6 +262,11 @@ def _construir_parser() -> argparse.ArgumentParser:
     )
 
     subcomandos.add_parser("adicionar_video", help="Cadastra um video manualmente.")
+
+    importar = subcomandos.add_parser(
+        "importar_videos", help="Importa videos em lote de um CSV externo."
+    )
+    importar.add_argument("origem", help="Caminho do CSV externo a importar.")
 
     return parser
 
