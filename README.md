@@ -21,6 +21,9 @@ It is an early MVP and a future building block of a larger "Creator Intelligence
   publication date (`--desde`), and top-N (`--top`).
 - Report export to **Markdown** or **CSV**, timestamped under `reports/`.
 - Manual video registration through the CLI, with duplicate-URL protection.
+- Batch import of videos from an external CSV, with per-row validation and a summary.
+- Data-quality diagnostics, plus a list of videos with no detected game.
+- Alias management to grow game detection from real data.
 
 No scraping, no external APIs, no database, no AI — **yet**. Data is filled in by hand
 on purpose, to validate the ranking "brain" before automating collection.
@@ -40,17 +43,20 @@ game-trend-recommender/
 |   |-- jogos_seed.csv
 |   `-- videos_coletados.csv
 |-- src/
-|   |-- main.py                # CLI (argparse): ranking, exportar_ranking, adicionar_video
+|   |-- main.py                # CLI (argparse): all commands + handlers
 |   |-- ranker.py              # ranking calculation
 |   |-- detector_jogo.py       # game detection by name / alias
 |   |-- leitor_csv.py          # CSV reading
-|   |-- cadastro_video.py      # manual video registration
+|   |-- cadastro_video.py      # manual + batch video registration
+|   |-- cadastro_jogo.py       # add aliases to jogos_seed.csv
+|   |-- diagnostico_dados.py   # data-quality diagnostics + orphan videos
 |   |-- metricas_video.py      # engagement metric (single source of truth)
 |   |-- relatorio.py           # Markdown / CSV report generation
 |   `-- modelos.py             # dataclasses (VideoColetado, JogoSeed, ...)
 |-- tests/                     # pytest suite
 |-- reports/                   # generated reports (Markdown / CSV)
 |-- docs/
+|   |-- fluxo_dados.md
 |   `-- publicacao_github.md
 |-- README.md
 `-- requirements.txt
@@ -75,6 +81,10 @@ ranking ordered by final score.
 | `ranking` | Print the ranking in the terminal (default when no command is given). |
 | `exportar_ranking` | Export the ranking to a timestamped file in `reports/`. |
 | `adicionar_video` | Register a video manually (interactive prompts). |
+| `importar_videos <csv>` | Batch-import videos from an external CSV (validates, skips duplicates and invalid rows, prints a summary). |
+| `diagnosticar_dados` | Print a data-quality report of the collected videos. |
+| `videos_sem_jogo` | List collected videos with no detected game, sorted by views. |
+| `adicionar_alias "<jogo>" "<alias>"` | Add an alias to a game in `jogos_seed.csv` (improves detection). |
 
 Shared options for `ranking` and `exportar_ranking`:
 
@@ -107,6 +117,16 @@ python src/main.py exportar_ranking --top 10 --formato csv
 
 # Register a video manually
 python src/main.py adicionar_video
+
+# Batch-import videos from an external CSV
+python src/main.py importar_videos data/importacoes/videos_novos.csv
+
+# Inspect data quality and find videos with no detected game
+python src/main.py diagnosticar_dados
+python src/main.py videos_sem_jogo
+
+# Add an alias so a game gets detected on the next run
+python src/main.py adicionar_alias "Schedule I" "schedule 1"
 ```
 
 ### Registering a video
@@ -156,6 +176,8 @@ score_final =
 The ranking also lists the videos behind each game, so you can check whether a score came
 from one strong video, several channels, or curiosity in the comments.
 
+See [`docs/fluxo_dados.md`](docs/fluxo_dados.md) for the full data flow, from input CSVs to reports.
+
 ## Testing
 
 ```bash
@@ -176,7 +198,7 @@ pushing.
 
 - Tune the formula weights after comparing rankings with real channel results.
 - Per-video CSV export (the CSV currently has one row per game).
-- **Sprint 2:** automate YouTube collection, keeping private data separate from public examples.
+- Automate collection (YouTube / TikTok), keeping private data separate from public examples.
 - Longer term, the project may grow into scraping, a dashboard, and AI-assisted analysis.
 
 ## Project status
