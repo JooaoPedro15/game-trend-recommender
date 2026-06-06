@@ -4,6 +4,7 @@ from pathlib import Path
 
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv, importar_videos_csv
 from cadastro_jogo import adicionar_alias_jogo
+from coletor_youtube import coletar_video_por_id
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking
@@ -37,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     origem = getattr(args, "origem", None)
     nome = getattr(args, "nome", None)
     alias = getattr(args, "alias", None)
+    video_id = getattr(args, "video_id", None)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -64,6 +66,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "adicionar_alias":
         adicionar_alias_interativo(nome, alias)
+        return 0
+
+    if comando == "coletar_video_youtube":
+        coletar_video_youtube_interativo(video_id)
         return 0
 
     return 0
@@ -200,6 +206,30 @@ def adicionar_alias_interativo(nome_jogo: str, alias: str) -> None:
         print(f"O jogo '{nome_jogo}' ja tinha o alias '{alias}'.")
 
 
+# Busca um video do YouTube por id e salva no CSV principal, reusando adicionar_video_csv.
+def coletar_video_youtube_interativo(video_id: str) -> None:
+    try:
+        video = coletar_video_por_id(video_id)
+    except RuntimeError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    if video is None:
+        print(f"Video nao encontrado no YouTube: {video_id}")
+        return
+
+    try:
+        adicionar_video_csv(VIDEOS_CSV, video)
+    except VideoDuplicadoError as erro:
+        print(f"Erro: {erro}")
+        return
+    except ValueError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    print(f"Video coletado e salvo: {video.titulo}")
+
+
 def adicionar_video_interativo() -> None:
     print("=== Adicionar Video Manual ===")
     print()
@@ -330,6 +360,11 @@ def _construir_parser() -> argparse.ArgumentParser:
     )
     alias_parser.add_argument("nome", help="Nome do jogo (ignora maiusculas).")
     alias_parser.add_argument("alias", help="Alias a adicionar ao jogo.")
+
+    coletar = subcomandos.add_parser(
+        "coletar_video_youtube", help="Busca um video do YouTube por id e salva no CSV."
+    )
+    coletar.add_argument("video_id", help="ID do video do YouTube (ex: dQw4w9WgXcQ).")
 
     return parser
 
