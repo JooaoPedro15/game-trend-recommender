@@ -6,10 +6,12 @@
 # Usa apenas a biblioteca padrao (urllib + json) — sem dependencia externa.
 
 import json
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
+from cadastro_video import VideoDuplicadoError, adicionar_video_csv
 from config import ler_chave_youtube
 from modelos import VideoColetado
 
@@ -69,3 +71,56 @@ def coletar_videos_canal(canal_id: str, limite: int) -> list[VideoColetado]:
         "Coleta por canal ainda nao implementada. "
         "Sera adicionada em uma etapa futura usando a YouTube Data API v3."
     )
+
+
+# Le os video_ids de um arquivo texto (um por linha), ignorando vazios e repetidos.
+def ler_ids_de_arquivo(caminho: str | Path) -> list[str]:
+    caminho = Path(caminho)
+    if not caminho.exists():
+        return []
+
+    ids = []
+    vistos = set()
+    for linha in caminho.read_text(encoding="utf-8").splitlines():
+        video_id = linha.strip()
+        if video_id and video_id not in vistos:
+            ids.append(video_id)
+            vistos.add(video_id)
+    return ids
+
+
+# Coleta varios videos por id (reusando coletar_video_por_id) e salva cada um no CSV.
+# Retorna as contagens: lidos, encontrados, salvos, duplicados, erros.
+def coletar_videos_por_ids(
+    caminho_ids: str | Path, caminho_destino: str | Path
+) -> dict[str, int]:
+    if ler_chave_youtube() is None:
+        raise RuntimeError(
+            "YOUTUBE_API_KEY nao definida no ambiente. "
+            "Defina a variavel antes de coletar do YouTube (veja .env.example)."
+        )
+
+    ids = ler_ids_de_arquivo(caminho_ids)
+    resumo = {"lidos": len(ids), "encontrados": 0, "salvos": 0, "duplicados": 0, "erros": 0}
+
+    for video_id in ids:
+        try:
+            video = coletar_video_por_id(video_id)
+        except RuntimeError:
+            resumo["erros"] += 1
+            continue
+
+        if video is None:
+            resumo["erros"] += 1
+            continue
+
+        resumo["encontrados"] += 1
+        try:
+            adicionar_video_csv(caminho_destino, video)
+            resumo["salvos"] += 1
+        except VideoDuplicadoError:
+            resumo["duplicados"] += 1
+        except ValueError:
+            resumo["erros"] += 1
+
+    return resumo

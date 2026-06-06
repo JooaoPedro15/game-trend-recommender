@@ -4,7 +4,7 @@ from pathlib import Path
 
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv, importar_videos_csv
 from cadastro_jogo import adicionar_alias_jogo
-from coletor_youtube import coletar_video_por_id
+from coletor_youtube import coletar_video_por_id, coletar_videos_por_ids
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking
@@ -39,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     nome = getattr(args, "nome", None)
     alias = getattr(args, "alias", None)
     video_id = getattr(args, "video_id", None)
+    arquivo_ids = getattr(args, "arquivo_ids", None)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -70,6 +71,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "coletar_video_youtube":
         coletar_video_youtube_interativo(video_id)
+        return 0
+
+    if comando == "coletar_videos_youtube":
+        coletar_videos_youtube_interativo(arquivo_ids)
         return 0
 
     return 0
@@ -230,6 +235,26 @@ def coletar_video_youtube_interativo(video_id: str) -> None:
     print(f"Video coletado e salvo: {video.titulo}")
 
 
+# Coleta varios videos do YouTube a partir de um arquivo de ids e mostra o resumo.
+def coletar_videos_youtube_interativo(caminho_ids: str) -> None:
+    if not Path(caminho_ids).exists():
+        print(f"Arquivo nao encontrado: {caminho_ids}")
+        return
+
+    try:
+        resumo = coletar_videos_por_ids(caminho_ids, VIDEOS_CSV)
+    except RuntimeError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    print("=== Coleta em lote do YouTube ===")
+    print(f"IDs lidos: {resumo['lidos']}")
+    print(f"Videos encontrados: {resumo['encontrados']}")
+    print(f"Videos salvos: {resumo['salvos']}")
+    print(f"Duplicados ignorados: {resumo['duplicados']}")
+    print(f"Erros: {resumo['erros']}")
+
+
 def adicionar_video_interativo() -> None:
     print("=== Adicionar Video Manual ===")
     print()
@@ -365,6 +390,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         "coletar_video_youtube", help="Busca um video do YouTube por id e salva no CSV."
     )
     coletar.add_argument("video_id", help="ID do video do YouTube (ex: dQw4w9WgXcQ).")
+
+    coletar_lote = subcomandos.add_parser(
+        "coletar_videos_youtube",
+        help="Coleta varios videos do YouTube a partir de um arquivo de ids.",
+    )
+    coletar_lote.add_argument("arquivo_ids", help="Arquivo texto com um video_id por linha.")
 
     return parser
 
