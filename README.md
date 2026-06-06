@@ -24,9 +24,10 @@ It is an early MVP and a future building block of a larger "Creator Intelligence
 - Batch import of videos from an external CSV, with per-row validation and a summary.
 - Data-quality diagnostics, plus a list of videos with no detected game.
 - Alias management to grow game detection from real data.
+- **Optional:** fetch a single video from YouTube by id (YouTube Data API v3) and add it to the dataset.
 
-No scraping, no external APIs, no database, no AI — **yet**. Data is filled in by hand
-on purpose, to validate the ranking "brain" before automating collection.
+No scraping, no database, no AI yet — and no bulk collection. The only network feature is the
+optional single-video YouTube fetch above; everything else runs offline from local CSVs.
 
 ## Tech stack
 
@@ -50,6 +51,8 @@ game-trend-recommender/
 |   |-- cadastro_video.py      # manual + batch video registration
 |   |-- cadastro_jogo.py       # add aliases to jogos_seed.csv
 |   |-- diagnostico_dados.py   # data-quality diagnostics + orphan videos
+|   |-- coletor_youtube.py     # YouTube Data API v3 collector (optional)
+|   |-- config.py              # reads YOUTUBE_API_KEY from the environment
 |   |-- metricas_video.py      # engagement metric (single source of truth)
 |   |-- relatorio.py           # Markdown / CSV report generation
 |   `-- modelos.py             # dataclasses (VideoColetado, JogoSeed, ...)
@@ -85,6 +88,7 @@ ranking ordered by final score.
 | `diagnosticar_dados` | Print a data-quality report of the collected videos. |
 | `videos_sem_jogo` | List collected videos with no detected game, sorted by views. |
 | `adicionar_alias "<jogo>" "<alias>"` | Add an alias to a game in `jogos_seed.csv` (improves detection). |
+| `coletar_video_youtube <video_id>` | Fetch one video from YouTube by id and save it to the CSV (**needs `YOUTUBE_API_KEY`**). |
 
 Shared options for `ranking` and `exportar_ranking`:
 
@@ -102,6 +106,39 @@ Extra option for `exportar_ranking` only:
 
 Run `python src/main.py --help` or `python src/main.py <command> --help` for the
 auto-generated help.
+
+## YouTube Data API (optional)
+
+Only one command touches the network: `coletar_video_youtube`. Everything else —
+ranking, CSV import, diagnostics, orphan listing, alias management and report export —
+works fully offline from the local CSVs, with **no API key**.
+
+**Setup:**
+
+1. In the Google Cloud Console, enable **YouTube Data API v3** and create an **API key**.
+2. Put the key in the `YOUTUBE_API_KEY` environment variable (never in code).
+3. Run the collector.
+
+```bash
+export YOUTUBE_API_KEY=your_key            # bash / zsh
+# PowerShell:  $env:YOUTUBE_API_KEY = "your_key"
+python src/main.py coletar_video_youtube dQw4w9WgXcQ
+```
+
+The fetch reads title, channel, url, views, likes, comments and publication date,
+converts them to the same `VideoColetado` format, and appends to
+`data/videos_coletados.csv` (duplicate URLs are rejected). From there the video flows
+through the normal ranking pipeline. It fetches **one video by id** — not channels or
+bulk collection (those are future work).
+
+**Key safety:**
+
+- `.env.example` documents only the **name** (`YOUTUBE_API_KEY=`) — **never** a real key.
+- Put the real value in `.env` / `.env.local`, which are gitignored.
+- The code only reads the key from the environment; it is never written into source.
+- `.env` is **not auto-loaded** — export the variable in your shell. (Auto-loading `.env`
+  would need an extra dependency, which has not been added.)
+- Quota: the free tier is ~10,000 units/day; one video fetch costs 1 unit.
 
 ## Example usage
 
@@ -127,6 +164,9 @@ python src/main.py videos_sem_jogo
 
 # Add an alias so a game gets detected on the next run
 python src/main.py adicionar_alias "Schedule I" "schedule 1"
+
+# Fetch one video from YouTube by id and save it (needs YOUTUBE_API_KEY)
+python src/main.py coletar_video_youtube dQw4w9WgXcQ
 ```
 
 ### Registering a video
@@ -203,7 +243,7 @@ pushing.
 
 ## Project status
 
-Early MVP under active development. Data is collected and registered **manually** — there
-is no scraping or external API yet. The current focus is validating the ranking logic from
-hand-filled CSVs before automating data collection, so the project is pre-1.0 and still
-stabilizing.
+Early MVP under active development. Data is mostly manual — CSV import and manual entry —
+plus an optional single-video YouTube fetch (the only network feature). No scraping, bulk
+collection, dashboard or AI yet. The focus is still validating the ranking logic, so the
+project is pre-1.0 and stabilizing.
