@@ -9,7 +9,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import coletor_youtube
-from coletor_youtube import _item_para_video, coletar_video_por_id
+from coletor_youtube import (
+    _item_para_video,
+    coletar_video_por_id,
+    coletar_videos_por_ids,
+    ler_ids_de_arquivo,
+)
+from leitor_csv import ler_videos_coletados
+from modelos import VideoColetado
 
 
 # Simula o objeto devolvido por urlopen: context manager com read() devolvendo JSON.
@@ -104,3 +111,54 @@ def test_coletar_video_por_id_sem_chave_levanta_erro(monkeypatch):
 
     with pytest.raises(RuntimeError):
         coletar_video_por_id("VID123")
+
+
+# --- Coleta em lote por arquivo de ids (sem rede) ---
+
+def test_ler_ids_ignora_vazios_e_repetidos(tmp_path):
+    arquivo = tmp_path / "ids.txt"
+    arquivo.write_text("VID1\n\nVID2\n   \nVID1\n", encoding="utf-8")
+
+    assert ler_ids_de_arquivo(arquivo) == ["VID1", "VID2"]
+
+
+def test_coletar_videos_por_ids_conta_e_salva(monkeypatch, tmp_path):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+
+    def _fake_por_id(video_id):
+        urls = {"VID1": "https://y/1", "VID2": "https://y/2", "VID1DUP": "https://y/1"}
+        if video_id not in urls:
+            return None
+        return VideoColetado(
+            titulo="jogo " + video_id,
+            canal="Canal Teste",
+            plataforma="youtube",
+            url=urls[video_id],
+            views=1,
+            likes=0,
+            comentarios=0,
+            data_publicacao="2026-05-01",
+            texto_comentarios="",
+        )
+
+    monkeypatch.setattr(coletor_youtube, "coletar_video_por_id", _fake_por_id)
+
+    arquivo = tmp_path / "ids.txt"
+    arquivo.write_text("VID1\nVID2\nVIDX\nVID1DUP\n", encoding="utf-8")
+    destino = tmp_path / "videos.csv"
+
+    resumo = coletar_videos_por_ids(arquivo, destino)
+
+    assert resumo == {"lidos": 4, "encontrados": 3, "salvos": 2, "duplicados": 1, "erros": 1}
+    salvos = ler_videos_coletados(destino)
+    assert [video.titulo for video in salvos] == ["jogo VID1", "jogo VID2"]
+    assert all(video.plataforma == "youtube" for video in salvos)
+
+
+def test_coletar_videos_por_ids_sem_chave_levanta_erro(monkeypatch, tmp_path):
+    monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
+    arquivo = tmp_path / "ids.txt"
+    arquivo.write_text("VID1\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError):
+        coletar_videos_por_ids(arquivo, tmp_path / "videos.csv")
