@@ -10,7 +10,7 @@ from modelos import JogoSeed, VideoColetado
 
 
 # Cria um video de teste com valores padrao sobrescreviveis.
-def _video(titulo="Jogo", canal="Canal A", plataforma="youtube", url="https://x/1", views=100, data="2026-05-01"):
+def _video(titulo="Jogo", canal="Canal A", plataforma="youtube", url="https://x/1", views=100, data="2026-05-01", origem=""):
     return VideoColetado(
         titulo=titulo,
         canal=canal,
@@ -21,12 +21,26 @@ def _video(titulo="Jogo", canal="Canal A", plataforma="youtube", url="https://x/
         comentarios=1,
         data_publicacao=data,
         texto_comentarios="",
+        origem=origem,
     )
 
 
 # Cria um jogo seed de teste.
 def _jogo(nome, aliases=None):
     return JogoSeed(nome=nome, aliases=aliases or [], genero="terror", fit_inicial=8.0)
+
+
+def test_conta_videos_por_origem():
+    videos = [
+        _video(url="https://x/1", origem="manual"),
+        _video(url="https://x/2", origem="youtube"),
+        _video(url="https://x/3", origem="youtube"),
+        _video(url="https://x/4", origem=""),
+    ]
+
+    diag = gerar_diagnostico(videos, [])
+
+    assert diag.por_origem == {"manual": 1, "youtube": 2, "desconhecida": 1}
 
 
 def test_conta_total_de_videos():
@@ -114,3 +128,17 @@ def test_videos_sem_jogo_ordena_por_views_desc():
     resultado = encontrar_videos_sem_jogo(videos, jogos)
 
     assert [video.titulo for video in resultado] == ["Misterio 2", "Misterio 3", "Misterio 1"]
+
+
+# Conta os videos por origem; origem vazia ("") aparece como "desconhecida".
+def test_conta_videos_por_origem():
+    videos = [
+        _video(url="https://x/1", origem="manual"),
+        _video(url="https://x/2", origem="youtube"),
+        _video(url="https://x/3", origem="youtube"),
+        _video(url="https://x/4"),
+    ]
+
+    diag = gerar_diagnostico(videos, [])
+
+    assert diag.por_origem == {"manual": 1, "youtube": 2, "desconhecida": 1}

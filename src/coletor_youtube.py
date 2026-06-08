@@ -83,6 +83,7 @@ def _item_para_video(item: dict, video_id: str) -> VideoColetado:
         comentarios=int(estatisticas.get("commentCount", 0)),
         data_publicacao=snippet.get("publishedAt", "")[:10],
         texto_comentarios="",
+        origem="youtube",
     )
 
 

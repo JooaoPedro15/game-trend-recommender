@@ -292,6 +292,7 @@ def adicionar_video_interativo() -> None:
             comentarios=_perguntar_int("comentarios"),
             data_publicacao=_perguntar_data_publicacao(),
             texto_comentarios=input("texto_comentarios: ").strip(),
+            origem="manual",
         )
         adicionar_video_csv(VIDEOS_CSV, video)
     except VideoDuplicadoError as erro:

@@ -28,6 +28,7 @@ class VideoColetado:
     comentarios: int
     data_publicacao: str
     texto_comentarios: str
+    origem: str = ""
 
 
 @dataclass

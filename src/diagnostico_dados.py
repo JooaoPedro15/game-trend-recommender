@@ -9,6 +9,7 @@ class DiagnosticoDados:
     total: int
     por_plataforma: dict[str, int]
     por_canal: dict[str, int]
+    por_origem: dict[str, int]
     sem_data_publicacao: int
     views_zeradas: int
     sem_url: int
@@ -33,6 +34,7 @@ def gerar_diagnostico(videos, jogos) -> DiagnosticoDados:
         total=len(videos),
         por_plataforma=dict(Counter(video.plataforma for video in videos)),
         por_canal=dict(Counter(video.canal for video in videos)),
+        por_origem=dict(Counter((video.origem or "desconhecida") for video in videos)),
         sem_data_publicacao=sum(1 for video in videos if not video.data_publicacao.strip()),
         views_zeradas=sum(1 for video in videos if video.views <= 0),
         sem_url=sum(1 for video in videos if not video.url.strip()),
@@ -63,6 +65,10 @@ def imprimir_diagnostico(diagnostico: DiagnosticoDados) -> None:
     print()
     print("Videos por canal:")
     _imprimir_contagem(diagnostico.por_canal)
+
+    print()
+    print("Videos por origem:")
+    _imprimir_contagem(diagnostico.por_origem)
 
     print()
     print("Possiveis problemas:")

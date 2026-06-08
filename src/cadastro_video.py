@@ -15,6 +15,7 @@ CAMPOS_VIDEO = [
     "comentarios",
     "data_publicacao",
     "texto_comentarios",
+    "origem",
 ]
 
 
@@ -50,6 +51,7 @@ def importar_videos_csv(
     for linha in _ler_linhas(caminho_origem):
         try:
             video = linha_para_video(linha)
+            video.origem = "importacao"
         except (ValueError, TypeError):
             invalidos += 1
             continue
@@ -102,4 +104,5 @@ def _video_para_linha(video: VideoColetado) -> dict[str, str | int]:
         "comentarios": int(video.comentarios),
         "data_publicacao": video.data_publicacao,
         "texto_comentarios": video.texto_comentarios,
+        "origem": video.origem,
     }
