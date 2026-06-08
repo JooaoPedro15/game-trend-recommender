@@ -4,7 +4,7 @@ from pathlib import Path
 
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv, importar_videos_csv
 from cadastro_jogo import adicionar_alias_jogo
-from coletor_youtube import CACHE_PADRAO, coletar_video_por_id, coletar_videos_por_ids
+from coletor_youtube import CACHE_PADRAO, coletar_canal, coletar_video_por_id, coletar_videos_por_ids
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking
@@ -40,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
     alias = getattr(args, "alias", None)
     video_id = getattr(args, "video_id", None)
     arquivo_ids = getattr(args, "arquivo_ids", None)
+    channel_id = getattr(args, "channel_id", None)
+    limite = getattr(args, "limite", 5)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -75,6 +77,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "coletar_videos_youtube":
         coletar_videos_youtube_interativo(arquivo_ids)
+        return 0
+
+    if comando == "coletar_canal_youtube":
+        coletar_canal_youtube_interativo(channel_id, limite)
         return 0
 
     return 0
@@ -255,6 +261,22 @@ def coletar_videos_youtube_interativo(caminho_ids: str) -> None:
     print(f"Erros: {resumo['erros']}")
 
 
+# Coleta os videos recentes de um canal do YouTube e mostra o resumo.
+def coletar_canal_youtube_interativo(channel_id: str, limite: int) -> None:
+    try:
+        resumo = coletar_canal(channel_id, VIDEOS_CSV, limite)
+    except RuntimeError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    print("=== Coleta de Canal do YouTube ===")
+    print(f"Videos recentes considerados: {resumo['lidos']}")
+    print(f"Videos encontrados: {resumo['encontrados']}")
+    print(f"Videos salvos: {resumo['salvos']}")
+    print(f"Duplicados ignorados: {resumo['duplicados']}")
+    print(f"Erros: {resumo['erros']}")
+
+
 def adicionar_video_interativo() -> None:
     print("=== Adicionar Video Manual ===")
     print()
@@ -396,6 +418,18 @@ def _construir_parser() -> argparse.ArgumentParser:
         help="Coleta varios videos do YouTube a partir de um arquivo de ids.",
     )
     coletar_lote.add_argument("arquivo_ids", help="Arquivo texto com um video_id por linha.")
+
+    canal = subcomandos.add_parser(
+        "coletar_canal_youtube",
+        help="Coleta os videos recentes de um canal do YouTube e salva no CSV.",
+    )
+    canal.add_argument("channel_id", help="ID do canal do YouTube (ex: UC...).")
+    canal.add_argument(
+        "--limite",
+        type=_top_valido,
+        default=5,
+        help="Quantos videos recentes coletar (padrao: 5).",
+    )
 
     return parser
 
