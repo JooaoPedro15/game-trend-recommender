@@ -1,6 +1,7 @@
 import json
 import sys
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -11,9 +12,12 @@ sys.path.insert(0, str(ROOT / "src"))
 import coletor_youtube
 from coletor_youtube import (
     _item_para_video,
+    coletar_canal,
     coletar_video_por_id,
     coletar_videos_por_ids,
+    listar_ids_recentes_do_canal,
     ler_ids_de_arquivo,
+    obter_playlist_uploads,
 )
 from leitor_csv import ler_videos_coletados
 from modelos import VideoColetado
@@ -162,3 +166,78 @@ def test_coletar_videos_por_ids_sem_chave_levanta_erro(monkeypatch, tmp_path):
 
     with pytest.raises(RuntimeError):
         coletar_videos_por_ids(arquivo, tmp_path / "videos.csv")
+
+
+# --- Coleta por canal (fake client roteando os 3 endpoints) ---
+
+# Fake do _get_json: channels -> uploads playlist, playlistItems -> ids, videos -> dados.
+def _fake_get_json(url):
+    if "/channels" in url:
+        return {"items": [{"contentDetails": {"relatedPlaylists": {"uploads": "UU_X"}}}]}
+    if "/playlistItems" in url:
+        n = int(parse_qs(urlparse(url).query)["maxResults"][0])
+        return {"items": [{"contentDetails": {"videoId": f"VID{i}"}} for i in range(n)]}
+    if "/videos" in url:
+        vid = parse_qs(urlparse(url).query)["id"][0]
+        return {
+            "items": [
+                {
+                    "snippet": {
+                        "title": f"jogo {vid}",
+                        "channelTitle": "Canal",
+                        "publishedAt": "2026-05-01T00:00:00Z",
+                    },
+                    "statistics": {"viewCount": "10", "likeCount": "1", "commentCount": "0"},
+                }
+            ]
+        }
+    return {"items": []}
+
+
+def test_obter_playlist_uploads(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json)
+
+    assert obter_playlist_uploads("UC_X") == "UU_X"
+
+
+def test_listar_ids_respeita_limite(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json)
+
+    assert listar_ids_recentes_do_canal("UC_X", 3) == ["VID0", "VID1", "VID2"]
+
+
+def test_listar_ids_canal_inexistente_retorna_vazio(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", lambda url: {"items": []})
+
+    assert listar_ids_recentes_do_canal("UC_X", 5) == []
+
+
+def test_listar_ids_canal_sem_videos_retorna_vazio(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+
+    def _so_uploads(url):
+        if "/channels" in url:
+            return {"items": [{"contentDetails": {"relatedPlaylists": {"uploads": "UU_X"}}}]}
+        return {"items": []}
+
+    monkeypatch.setattr(coletor_youtube, "_get_json", _so_uploads)
+
+    assert listar_ids_recentes_do_canal("UC_X", 5) == []
+
+
+def test_coletar_canal_converte_e_salva(monkeypatch, tmp_path):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json)
+
+    destino = tmp_path / "videos.csv"
+    cache = tmp_path / "cache.json"
+
+    resumo = coletar_canal("UC_X", destino, limite=2, caminho_cache=cache)
+
+    assert resumo == {"lidos": 2, "encontrados": 2, "salvos": 2, "duplicados": 0, "erros": 0}
+    salvos = ler_videos_coletados(destino)
+    assert [video.titulo for video in salvos] == ["jogo VID0", "jogo VID1"]
+    assert all(video.plataforma == "youtube" for video in salvos)
