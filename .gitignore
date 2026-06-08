@@ -36,6 +36,7 @@ data/raw/
 data/private/
 data/privado/
 data/exports/
+data/cache/
 data/*.local.csv
 data/*.private.csv
 data/*.privado.csv

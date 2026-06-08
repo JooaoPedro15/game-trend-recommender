@@ -11,6 +11,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
+from cache_youtube import CACHE_PATH as CACHE_PADRAO, buscar_no_cache, salvar_no_cache
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv
 from config import ler_chave_youtube
 from modelos import VideoColetado
@@ -20,9 +21,17 @@ API_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 
 
 # Busca os dados de um video do YouTube por id e devolve um VideoColetado.
-# Retorna None se o video nao existir. Levanta RuntimeError se a chave estiver
-# ausente ou se a API responder com erro.
-def coletar_video_por_id(video_id: str) -> VideoColetado | None:
+# Se caminho_cache for dado, consulta o cache antes (hit = sem chamada de API) e
+# salva o resultado nele. Retorna None se o video nao existir; levanta RuntimeError
+# se a chave estiver ausente ou se a API responder com erro.
+def coletar_video_por_id(
+    video_id: str, caminho_cache: str | Path | None = None
+) -> VideoColetado | None:
+    if caminho_cache is not None:
+        em_cache = buscar_no_cache(video_id, caminho_cache)
+        if em_cache is not None:
+            return em_cache
+
     chave = ler_chave_youtube()
     if chave is None:
         raise RuntimeError(
@@ -45,7 +54,10 @@ def coletar_video_por_id(video_id: str) -> VideoColetado | None:
     if not itens:
         return None
 
-    return _item_para_video(itens[0], video_id)
+    video = _item_para_video(itens[0], video_id)
+    if caminho_cache is not None:
+        salvar_no_cache(video_id, video, caminho_cache)
+    return video
 
 
 # Converte um item da resposta da YouTube Data API em VideoColetado.
@@ -92,7 +104,9 @@ def ler_ids_de_arquivo(caminho: str | Path) -> list[str]:
 # Coleta varios videos por id (reusando coletar_video_por_id) e salva cada um no CSV.
 # Retorna as contagens: lidos, encontrados, salvos, duplicados, erros.
 def coletar_videos_por_ids(
-    caminho_ids: str | Path, caminho_destino: str | Path
+    caminho_ids: str | Path,
+    caminho_destino: str | Path,
+    caminho_cache: str | Path | None = CACHE_PADRAO,
 ) -> dict[str, int]:
     if ler_chave_youtube() is None:
         raise RuntimeError(
@@ -105,7 +119,7 @@ def coletar_videos_por_ids(
 
     for video_id in ids:
         try:
-            video = coletar_video_por_id(video_id)
+            video = coletar_video_por_id(video_id, caminho_cache)
         except RuntimeError:
             resumo["erros"] += 1
             continue

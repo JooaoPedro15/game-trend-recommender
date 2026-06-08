@@ -125,7 +125,7 @@ def test_ler_ids_ignora_vazios_e_repetidos(tmp_path):
 def test_coletar_videos_por_ids_conta_e_salva(monkeypatch, tmp_path):
     monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
 
-    def _fake_por_id(video_id):
+    def _fake_por_id(video_id, caminho_cache=None):
         urls = {"VID1": "https://y/1", "VID2": "https://y/2", "VID1DUP": "https://y/1"}
         if video_id not in urls:
             return None

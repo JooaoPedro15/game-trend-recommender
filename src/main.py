@@ -4,7 +4,7 @@ from pathlib import Path
 
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv, importar_videos_csv
 from cadastro_jogo import adicionar_alias_jogo
-from coletor_youtube import coletar_video_por_id, coletar_videos_por_ids
+from coletor_youtube import CACHE_PADRAO, coletar_video_por_id, coletar_videos_por_ids
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking
@@ -214,7 +214,7 @@ def adicionar_alias_interativo(nome_jogo: str, alias: str) -> None:
 # Busca um video do YouTube por id e salva no CSV principal, reusando adicionar_video_csv.
 def coletar_video_youtube_interativo(video_id: str) -> None:
     try:
-        video = coletar_video_por_id(video_id)
+        video = coletar_video_por_id(video_id, CACHE_PADRAO)
     except RuntimeError as erro:
         print(f"Erro: {erro}")
         return
