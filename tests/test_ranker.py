@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from modelos import CanalReferencia, JogoSeed, VideoColetado
-from ranker import calcular_ranking
+from ranker import calcular_ranking, _calcular_bonus_velocidade
 from main import imprimir_ranking
 from datetime import date, timedelta
 
@@ -276,6 +276,72 @@ def test_ranking_prioriza_video_com_maior_engajamento():
     )
 
     assert ranking[0].jogo.nome == "Game Mais Engajamento"
+
+
+def test_ranking_prioriza_video_com_alta_velocidade_sobre_video_antigo_parecido():
+    hoje = date.today()
+
+    jogo_rapido = JogoSeed(
+        nome="Game Rapido",
+        aliases=[],
+        genero="terror",
+        fit_inicial=8.0,
+    )
+
+    jogo_antigo = JogoSeed(
+        nome="Game Antigo",
+        aliases=[],
+        genero="terror",
+        fit_inicial=8.0,
+    )
+
+    video_rapido = VideoColetado(
+        titulo="Game Rapido viralizou hoje",
+        canal="Canal Teste",
+        plataforma="YouTube",
+        url="https://youtube.com/rapido",
+        views=100000,
+        likes=0,
+        comentarios=0,
+        data_publicacao=hoje.isoformat(),
+        texto_comentarios="",
+    )
+
+    video_antigo = VideoColetado(
+        titulo="Game Antigo cresceu devagar",
+        canal="Canal Teste",
+        plataforma="YouTube",
+        url="https://youtube.com/antigo-parecido",
+        views=220000,
+        likes=0,
+        comentarios=0,
+        data_publicacao=(hoje - timedelta(days=120)).isoformat(),
+        texto_comentarios="",
+    )
+
+    ranking = calcular_ranking(
+        [jogo_rapido, jogo_antigo],
+        [video_rapido, video_antigo],
+        [],
+    )
+
+    assert ranking[0].jogo.nome == "Game Rapido"
+
+
+def test_bonus_velocidade_nao_ultrapassa_metade_das_views():
+    video = VideoColetado(
+        titulo="Game rapido demais",
+        canal="Canal Teste",
+        plataforma="YouTube",
+        url="https://youtube.com/rapido-demais",
+        views=100000,
+        likes=0,
+        comentarios=0,
+        data_publicacao=date.today().isoformat(),
+        texto_comentarios="",
+    )
+
+    assert _calcular_bonus_velocidade(video) == 50000.0
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 from collections import defaultdict
 from unicodedata import combining, normalize
 from datetime import date
-from metricas_video import calcular_taxa_engajamento
+from metricas_video import calcular_taxa_engajamento, calcular_views_por_dia
 
 from detector_jogo import detectar_jogos_no_video
 from modelos import (
@@ -117,8 +117,22 @@ def _calcular_tendencia_bruta(
 def _score_video(video: VideoColetado) -> float:
     taxa_engajamento = calcular_taxa_engajamento(video)
     bonus_engajamento = video.views * taxa_engajamento * 2
+    bonus_velocidade = _calcular_bonus_velocidade(video)
 
-    return video.views + video.likes * 5 + video.comentarios * 20 + bonus_engajamento
+    return (
+        video.views
+        + video.likes * 5
+        + video.comentarios * 20
+        + bonus_engajamento
+        + bonus_velocidade
+    )
+
+
+def _calcular_bonus_velocidade(video: VideoColetado) -> float:
+    velocidade = max(calcular_views_por_dia(video), 0.0)
+    teto = max(video.views, 0) * 0.5
+
+    return min(velocidade * 0.5, teto)
 
 
 def _calcular_peso_recencia(data_publicacao: str) -> float:

@@ -11,7 +11,7 @@ def calcular_taxa_engajamento(video: VideoColetado) -> float:
     return (video.likes + video.comentarios) / video.views
 
 
-def views_por_dia(video: VideoColetado) -> float:
+def calcular_views_por_dia(video: VideoColetado) -> float:
     try:
         data_video = date.fromisoformat(video.data_publicacao)
     except ValueError:
@@ -19,3 +19,7 @@ def views_por_dia(video: VideoColetado) -> float:
 
     idade_em_dias = max((date.today() - data_video).days, 1)
     return video.views / idade_em_dias
+
+
+def views_por_dia(video: VideoColetado) -> float:
+    return calcular_views_por_dia(video)
