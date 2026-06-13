@@ -90,7 +90,9 @@ score_final = tendencia*0.40 + fit_canal*0.35 + descoberta*0.15 + saturacao*0.10
 - **saturacao** — favorece jogos ainda em poucos canais (oportunidade antes de saturar).
 
 O resultado sai ordenado por `score_final` (desc). Cada item guarda os vídeos que
-influenciaram e um `motivo` em texto.
+influenciaram, um `score_oportunidade` (tendência + saturação + descoberta), um
+`motivo` em texto e uma `acao_recomendada`. Fórmulas, pesos e limiares detalhados
+em `docs/ranking_logic.md` — todos ainda heurísticos do MVP.
 
 ### Filtros (aplicados ANTES do cálculo)
 

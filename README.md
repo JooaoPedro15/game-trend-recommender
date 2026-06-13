@@ -16,7 +16,8 @@ It is an early MVP and a future building block of a larger "Creator Intelligence
 
 - Ranks games from manually collected video data (CSV files).
 - Detects games in video titles and comments by name and aliases.
-- Explainable scoring: each game shows the videos and signals behind its rank.
+- Explainable scoring: each game shows the videos and signals behind its rank, plus an
+  **opportunity score**, a human-readable reason and a **recommended action**.
 - Filters for `ranking` / `exportar_ranking`: platform (`--plataforma`),
   publication date (`--desde`), and top-N (`--top`).
 - Report export to **Markdown** or **CSV**, timestamped under `reports/`.
@@ -24,10 +25,11 @@ It is an early MVP and a future building block of a larger "Creator Intelligence
 - Batch import of videos from an external CSV, with per-row validation and a summary.
 - Data-quality diagnostics, plus a list of videos with no detected game.
 - Alias management to grow game detection from real data.
-- **Optional:** fetch a single video from YouTube by id (YouTube Data API v3) and add it to the dataset.
+- **Optional:** collect videos from YouTube (Data API v3) — by video id, in batch from an
+  id file, or a channel's recent uploads — with a local cache to save API quota.
 
-No scraping, no database, no AI yet — and no bulk collection. The only network feature is the
-optional single-video YouTube fetch above; everything else runs offline from local CSVs.
+No scraping, no database, no AI yet. The only network features are the optional YouTube
+collectors above; everything else runs offline from local CSVs.
 
 ## Tech stack
 
@@ -89,6 +91,8 @@ ranking ordered by final score.
 | `videos_sem_jogo` | List collected videos with no detected game, sorted by views. |
 | `adicionar_alias "<jogo>" "<alias>"` | Add an alias to a game in `jogos_seed.csv` (improves detection). |
 | `coletar_video_youtube <video_id>` | Fetch one video from YouTube by id and save it to the CSV (**needs `YOUTUBE_API_KEY`**). |
+| `coletar_videos_youtube <ids.txt>` | Batch-fetch YouTube videos from a file with one video id per line (**needs `YOUTUBE_API_KEY`**). |
+| `coletar_canal_youtube <channel_id> [--limite N]` | Fetch a channel's recent uploads (default 5) and save them (**needs `YOUTUBE_API_KEY`**). |
 
 Shared options for `ranking` and `exportar_ranking`:
 
@@ -207,16 +211,25 @@ score_final =
     score_saturacao  * 0.10
 ```
 
-- **score_tendencia** — views, likes, comments, channel weight, recency, and the number
-  of distinct channels.
+- **score_tendencia** — views, likes, comments, **engagement rate**, **velocity
+  (views/day)**, a per-platform weight (autoplay views count slightly less than
+  YouTube views), channel weight and recency.
 - **score_fit_canal** — `fit_inicial` (0–10) rescaled to 0–100.
 - **score_descoberta** — higher when comments ask the game's name or where to find it.
 - **score_saturacao** — favors games still seen on few channels (catch them before saturation).
 
-The ranking also lists the videos behind each game, so you can check whether a score came
-from one strong video, several channels, or curiosity in the comments.
+On top of those, each game also gets:
 
-See [`docs/fluxo_dados.md`](docs/fluxo_dados.md) for the full data flow, from input CSVs to reports.
+- **score_oportunidade** = `tendencia*0.40 + saturacao*0.40 + descoberta*0.20` — "where is
+  the entry window?" (fit is excluded on purpose: the opportunity belongs to the market).
+- a **reason** in plain language, aware of the opportunity signals;
+- a **recommended action** (prioritize a long video, test in a Short, research more,
+  monitor, or avoid due to saturation).
+
+All weights and thresholds are **MVP heuristics** — chosen deliberately but not yet
+calibrated against real channel results (that tuning is on the roadmap). See
+[`docs/ranking_logic.md`](docs/ranking_logic.md) for every formula and threshold, and
+[`docs/fluxo_dados.md`](docs/fluxo_dados.md) for the full data flow.
 
 ## Testing
 
@@ -244,6 +257,6 @@ pushing.
 ## Project status
 
 Early MVP under active development. Data is mostly manual — CSV import and manual entry —
-plus an optional single-video YouTube fetch (the only network feature). No scraping, bulk
-collection, dashboard or AI yet. The focus is still validating the ranking logic, so the
+plus optional YouTube collection (single video, id batch, or a channel's recent uploads).
+No scraping, dashboard or AI yet. The ranking weights are uncalibrated heuristics, so the
 project is pre-1.0 and stabilizing.
