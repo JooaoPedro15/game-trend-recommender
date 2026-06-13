@@ -1,9 +1,9 @@
-titulo,canal,plataforma,url,views,likes,comentarios,data_publicacao,texto_comentarios,origem
-"Esse jogo de terror me quebrou","Canal Referencia 1","youtube","https://exemplo.com/video1",800000,90000,1200,"2026-05-15","qual nome do jogo? repo muito bom parece lethal company","manual"
-"O terror cooperativo mais caotico voltou","Canal Referencia 2","tiktok","https://exemplo.com/video2",620000,72000,980,"2026-05-16","que jogo e esse? repo game tem na steam?","manual"
-"Fui traido pelo monstro no escuro","Canal Referencia 3","instagram","https://exemplo.com/video3",260000,21000,430,"2026-05-17","r.e.p.o parece perfeito pra jogar com amigos","manual"
-"Content Warning rendeu o pior susto","Canal Referencia 1","youtube","https://exemplo.com/video4",420000,38000,760,"2026-05-14","nome do jogo content warning onde baixa","manual"
-"Schedule I virou caos total","Canal Referencia 2","tiktok","https://exemplo.com/video5",510000,45000,640,"2026-05-17","game name? schedule i parece muito absurdo","manual"
-"Minecraft mas tudo da errado","Canal Referencia 3","instagram","https://exemplo.com/video6",180000,16000,210,"2026-05-12","minecraft de novo ficou engracado","manual"
-"Roblox estranho que parece filme de terror","Canal Referencia 1","youtube","https://exemplo.com/video7",150000,11000,180,"2026-05-11","roblox sempre aparece nos shorts","manual"
-"Lethal Company ainda rende corte bom","Canal Referencia 2","tiktok","https://exemplo.com/video8",240000,22000,310,"2026-05-10","lethal company classico","manual"
+titulo,canal,plataforma,url,views,likes,comentarios,data_publicacao,texto_comentarios,origem,tipo_video
+"Esse jogo de terror me quebrou","Canal Referencia 1","youtube","https://exemplo.com/video1",800000,90000,1200,"2026-05-15","qual nome do jogo? repo muito bom parece lethal company","manual","longo"
+"O terror cooperativo mais caotico voltou","Canal Referencia 2","tiktok","https://exemplo.com/video2",620000,72000,980,"2026-05-16","que jogo e esse? repo game tem na steam?","manual","curto"
+"Fui traido pelo monstro no escuro","Canal Referencia 3","instagram","https://exemplo.com/video3",260000,21000,430,"2026-05-17","r.e.p.o parece perfeito pra jogar com amigos","manual","curto"
+"Content Warning rendeu o pior susto","Canal Referencia 1","youtube","https://exemplo.com/video4",420000,38000,760,"2026-05-14","nome do jogo content warning onde baixa","manual","longo"
+"Schedule I virou caos total","Canal Referencia 2","tiktok","https://exemplo.com/video5",510000,45000,640,"2026-05-17","game name? schedule i parece muito absurdo","manual","curto"
+"Minecraft mas tudo da errado","Canal Referencia 3","instagram","https://exemplo.com/video6",180000,16000,210,"2026-05-12","minecraft de novo ficou engracado","manual","curto"
+"Roblox estranho que parece filme de terror","Canal Referencia 1","youtube","https://exemplo.com/video7",150000,11000,180,"2026-05-11","roblox sempre aparece nos shorts","manual","longo"
+"Lethal Company ainda rende corte bom","Canal Referencia 2","tiktok","https://exemplo.com/video8",240000,22000,310,"2026-05-10","lethal company classico","manual","curto"

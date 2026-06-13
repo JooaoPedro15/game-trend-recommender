@@ -16,6 +16,7 @@ CAMPOS_VIDEO = [
     "data_publicacao",
     "texto_comentarios",
     "origem",
+    "tipo_video",
 ]
 
 
@@ -105,4 +106,5 @@ def _video_para_linha(video: VideoColetado) -> dict[str, str | int]:
         "data_publicacao": video.data_publicacao,
         "texto_comentarios": video.texto_comentarios,
         "origem": video.origem,
+        "tipo_video": video.tipo_video,
     }

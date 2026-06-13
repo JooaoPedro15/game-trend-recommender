@@ -456,6 +456,7 @@ def adicionar_video_interativo() -> None:
             data_publicacao=_perguntar_data_publicacao(),
             texto_comentarios=input("texto_comentarios: ").strip(),
             origem="manual",
+            tipo_video=_perguntar_tipo_video(),
         )
         adicionar_video_csv(VIDEOS_CSV, video)
     except VideoDuplicadoError as erro:
@@ -491,6 +492,12 @@ def _perguntar_data_publicacao() -> str:
     if valor:
         return valor
     return date.today().isoformat()
+
+
+# Pergunta o tipo do video; vazio assume "desconhecido".
+def _perguntar_tipo_video() -> str:
+    valor = input("tipo_video (curto/longo/live) [desconhecido]: ").strip()
+    return valor or "desconhecido"
 
 
 # Valida o argumento --top: precisa ser um inteiro positivo.

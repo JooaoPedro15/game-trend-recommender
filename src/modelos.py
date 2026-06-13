@@ -29,6 +29,7 @@ class VideoColetado:
     data_publicacao: str
     texto_comentarios: str
     origem: str = ""
+    tipo_video: str = "desconhecido"
 
 
 @dataclass

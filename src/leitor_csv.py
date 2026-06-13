@@ -47,6 +47,7 @@ def linha_para_video(linha: dict[str, str]) -> VideoColetado:
         data_publicacao=linha.get("data_publicacao", "").strip(),
         texto_comentarios=linha.get("texto_comentarios", "").strip(),
         origem=linha.get("origem", "").strip(),
+        tipo_video=linha.get("tipo_video", "").strip() or "desconhecido",
     )
 
 
