@@ -83,6 +83,7 @@ def calcular_ranking(
                     score_tendencia,
                     score_descoberta,
                     score_saturacao,
+                    score_oportunidade,
                     canais_diferentes,
                 ),
                 videos=videos_ordenados,
@@ -231,6 +232,7 @@ def _gerar_motivo(
     score_tendencia: float,
     score_descoberta: float,
     score_saturacao: float,
+    score_oportunidade: float,
     canais_diferentes: int,
 ) -> str:
     maior_views = max((video.views for video in videos), default=0)
@@ -239,8 +241,22 @@ def _gerar_motivo(
     tem_varios_canais = canais_diferentes > 1
     tem_fit_alto = jogo.fit_inicial >= 8
     tem_poucos_canais = score_saturacao >= 75
+    tem_alta_oportunidade = score_oportunidade >= 75
+    tem_muitos_canais = score_saturacao <= 55
     tem_video_recente = _tem_video_recente(videos)
     tem_engajamento_alto = _tem_engajamento_alto(videos)
+
+    if tem_alta_oportunidade and tem_poucos_canais and tem_engajamento_alto:
+        return (
+            "Jogo ainda aparece em poucos canais, mas tem boa velocidade e alto "
+            "engajamento, indicando oportunidade antes da saturacao."
+        )
+
+    if tem_alta_performance and tem_muitos_canais:
+        return (
+            "Jogo esta em alta, mas ja aparece em varios canais de referencia; "
+            "vale entrar apenas com um angulo diferente."
+        )
 
     if tem_engajamento_alto and tem_video_recente:
      return "Jogo apareceu em video recente com alto engajamento, indicando interesse atual do publico."
@@ -262,6 +278,12 @@ def _gerar_motivo(
 
     if tem_fit_alto and tem_curiosidade:
         return "Jogo combina com o canal e gerou curiosidade nos comentarios."
+
+    if tem_fit_alto and len(videos) == 1 and not tem_alta_performance:
+        return (
+            "Jogo combina com o canal, mas ainda ha pouca evidencia coletada; "
+            "vale observar mais alguns videos."
+        )
 
     if tem_fit_alto:
         return "Jogo tem bom fit inicial com o canal e foi detectado nos videos coletados."

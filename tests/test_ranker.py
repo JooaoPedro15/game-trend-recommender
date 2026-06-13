@@ -439,5 +439,84 @@ def test_ranking_preenche_score_oportunidade():
     assert resultado.score_oportunidade > 0
 
 
+# Alta oportunidade (poucos canais + engajamento alto) vira o motivo principal.
+def test_motivo_destaca_oportunidade():
+    jogo = JogoSeed(nome="Game Janela", aliases=[], genero="terror", fit_inicial=8.0)
+    video = VideoColetado(
+        titulo="Game Janela explodiu do nada",
+        canal="Canal Unico",
+        plataforma="youtube",
+        url="https://youtube.com/janela",
+        views=100000,
+        likes=9000,
+        comentarios=1500,
+        data_publicacao=date.today().isoformat(),
+        texto_comentarios="",
+    )
+
+    resultado = calcular_ranking([jogo], [video], [])[0]
+
+    assert "oportunidade antes da saturacao" in resultado.motivo
+
+
+# Alta tendencia mas muitos canais: o motivo avisa que precisa de angulo diferente.
+def test_motivo_avisa_jogo_saturado():
+    jogo = JogoSeed(nome="Game Saturado", aliases=[], genero="terror", fit_inicial=8.0)
+    data_antiga = (date.today() - timedelta(days=120)).isoformat()
+    videos = [
+        VideoColetado(
+            titulo=f"Game Saturado no canal {indice}",
+            canal=f"Canal {indice}",
+            plataforma="youtube",
+            url=f"https://youtube.com/saturado-{indice}",
+            views=600000,
+            likes=100,
+            comentarios=10,
+            data_publicacao=data_antiga,
+            texto_comentarios="",
+        )
+        for indice in range(4)
+    ]
+
+    resultado = calcular_ranking([jogo], videos, [])[0]
+
+    assert "angulo diferente" in resultado.motivo
+
+
+# Fit alto com um unico video fraco: o motivo admite a pouca evidencia.
+def test_motivo_indica_pouca_evidencia():
+    jogo_forte = JogoSeed(nome="Game Forte", aliases=[], genero="terror", fit_inicial=8.0)
+    jogo_fraco = JogoSeed(nome="Game Fraco", aliases=[], genero="terror", fit_inicial=9.0)
+    data_antiga = (date.today() - timedelta(days=120)).isoformat()
+
+    video_forte = VideoColetado(
+        titulo="Game Forte viralizou",
+        canal="Canal A",
+        plataforma="youtube",
+        url="https://youtube.com/forte",
+        views=800000,
+        likes=50000,
+        comentarios=2000,
+        data_publicacao=date.today().isoformat(),
+        texto_comentarios="",
+    )
+    video_fraco = VideoColetado(
+        titulo="Game Fraco apareceu uma vez",
+        canal="Canal B",
+        plataforma="youtube",
+        url="https://youtube.com/fraco",
+        views=5000,
+        likes=5,
+        comentarios=0,
+        data_publicacao=data_antiga,
+        texto_comentarios="",
+    )
+
+    ranking = calcular_ranking([jogo_forte, jogo_fraco], [video_forte, video_fraco], [])
+    resultado_fraco = next(r for r in ranking if r.jogo.nome == "Game Fraco")
+
+    assert "pouca evidencia" in resultado_fraco.motivo
+
+
 if __name__ == "__main__":
     unittest.main()
