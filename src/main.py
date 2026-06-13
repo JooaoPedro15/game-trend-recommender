@@ -17,6 +17,7 @@ from diagnostico_dados import (
     imprimir_videos_sem_jogo,
 )
 from historico_ranking import comparar_ultimas_execucoes, imprimir_comparacao, salvar_snapshot
+from watchlist import adicionar_jogo, listar_jogos, remover_jogo
 
 
 
@@ -24,6 +25,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
 VIDEOS_CSV = DATA_DIR / "videos_coletados.csv"
 HISTORICO_CSV = DATA_DIR / "historico_rankings.csv"
+WATCHLIST_CSV = DATA_DIR / "watchlist_jogos.csv"
 REPORTS_DIR = BASE_DIR / "reports"
 RANKING_REPORT = REPORTS_DIR / "ranking.md"
 
@@ -44,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     arquivo_ids = getattr(args, "arquivo_ids", None)
     channel_id = getattr(args, "channel_id", None)
     limite = getattr(args, "limite", 5)
+    jogo = getattr(args, "jogo", None)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -95,6 +98,18 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "oportunidades":
         mostrar_oportunidades(plataforma, top, desde)
+        return 0
+
+    if comando == "adicionar_watchlist":
+        adicionar_watchlist_interativo(jogo)
+        return 0
+
+    if comando == "listar_watchlist":
+        listar_watchlist_interativo()
+        return 0
+
+    if comando == "remover_watchlist":
+        remover_watchlist_interativo(jogo)
         return 0
 
     return 0
@@ -349,6 +364,39 @@ def comparar_rankings_interativo() -> None:
     imprimir_comparacao(comparacao)
 
 
+# Adiciona um jogo a watchlist (lista pessoal de jogos a acompanhar de perto).
+def adicionar_watchlist_interativo(nome_jogo: str) -> None:
+    try:
+        adicionado = adicionar_jogo(WATCHLIST_CSV, nome_jogo)
+    except ValueError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    if adicionado:
+        print(f"'{nome_jogo}' adicionado a watchlist.")
+    else:
+        print(f"'{nome_jogo}' ja esta na watchlist.")
+
+
+# Lista os jogos da watchlist, na ordem em que foram adicionados.
+def listar_watchlist_interativo() -> None:
+    jogos = listar_jogos(WATCHLIST_CSV)
+    print("=== Watchlist ===")
+    if not jogos:
+        print("(vazia)")
+        return
+    for nome in jogos:
+        print(f"- {nome}")
+
+
+# Remove um jogo da watchlist (ignora maiusculas/minusculas).
+def remover_watchlist_interativo(nome_jogo: str) -> None:
+    if remover_jogo(WATCHLIST_CSV, nome_jogo):
+        print(f"'{nome_jogo}' removido da watchlist.")
+    else:
+        print(f"'{nome_jogo}' nao estava na watchlist.")
+
+
 def adicionar_video_interativo() -> None:
     print("=== Adicionar Video Manual ===")
     print()
@@ -520,6 +568,18 @@ def _construir_parser() -> argparse.ArgumentParser:
         help="Lista apenas os jogos com alto potencial de oportunidade.",
     )
     _adicionar_filtros(oportunidades)
+
+    adicionar_wl = subcomandos.add_parser(
+        "adicionar_watchlist", help="Adiciona um jogo a watchlist."
+    )
+    adicionar_wl.add_argument("jogo", help="Nome do jogo a acompanhar.")
+
+    subcomandos.add_parser("listar_watchlist", help="Lista os jogos da watchlist.")
+
+    remover_wl = subcomandos.add_parser(
+        "remover_watchlist", help="Remove um jogo da watchlist."
+    )
+    remover_wl.add_argument("jogo", help="Nome do jogo a remover.")
 
     return parser
 
