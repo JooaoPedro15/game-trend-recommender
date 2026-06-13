@@ -9,7 +9,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from modelos import CanalReferencia, JogoSeed, VideoColetado
-from ranker import calcular_ranking, _calcular_bonus_velocidade, peso_base_plataforma
+from ranker import (
+    calcular_ranking,
+    _calcular_bonus_velocidade,
+    _calcular_score_oportunidade,
+    peso_base_plataforma,
+)
 from main import imprimir_ranking
 from metricas_video import calcular_views_por_dia
 from datetime import date, timedelta
@@ -397,6 +402,41 @@ def test_ranking_pesa_views_do_youtube_mais_que_tiktok():
 
     assert ranking[0].jogo.nome == "Game Youtube"
     assert ranking[0].score_tendencia > ranking[1].score_tendencia
+
+
+# Formula da oportunidade: tendencia*0.40 + saturacao*0.40 + descoberta*0.20.
+def test_score_oportunidade_combina_sinais():
+    assert _calcular_score_oportunidade(100.0, 90.0, 50.0) == 86.0
+    assert _calcular_score_oportunidade(0.0, 0.0, 0.0) == 0.0
+
+
+# O ranking preenche score_oportunidade coerente com os proprios sub-scores.
+def test_ranking_preenche_score_oportunidade():
+    jogo = JogoSeed(nome="Game Oportuno", aliases=[], genero="terror", fit_inicial=8.0)
+    video = VideoColetado(
+        titulo="Game Oportuno viralizou",
+        canal="Canal Teste",
+        plataforma="youtube",
+        url="https://youtube.com/oportuno",
+        views=100000,
+        likes=1000,
+        comentarios=100,
+        data_publicacao=date.today().isoformat(),
+        texto_comentarios="",
+    )
+
+    resultado = calcular_ranking([jogo], [video], [])[0]
+
+    esperado = round(
+        _calcular_score_oportunidade(
+            resultado.score_tendencia,
+            resultado.score_saturacao,
+            resultado.score_descoberta,
+        ),
+        1,
+    )
+    assert resultado.score_oportunidade == esperado
+    assert resultado.score_oportunidade > 0
 
 
 if __name__ == "__main__":

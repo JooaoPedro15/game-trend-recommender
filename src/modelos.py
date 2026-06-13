@@ -43,3 +43,4 @@ class ResultadoRecomendacao:
     canais_diferentes: int
     motivo: str
     videos: list[VideoColetado]
+    score_oportunidade: float = 0.0

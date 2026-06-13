@@ -63,6 +63,9 @@ def calcular_ranking(
             + score_descoberta * 0.15
             + score_saturacao * 0.10
         )
+        score_oportunidade = _calcular_score_oportunidade(
+            score_tendencia, score_saturacao, score_descoberta
+        )
 
         resultados.append(
             ResultadoRecomendacao(
@@ -83,6 +86,7 @@ def calcular_ranking(
                     canais_diferentes,
                 ),
                 videos=videos_ordenados,
+                score_oportunidade=round(score_oportunidade, 1),
             )
         )
 
@@ -188,6 +192,16 @@ def _calcular_score_descoberta(videos: list[VideoColetado]) -> float:
     proporcao_videos = videos_com_sinal / len(videos)
     bonus_repeticao = min(total_sinais, 3) * 10
     return _limitar(proporcao_videos * 70 + bonus_repeticao)
+
+
+# Combina performance com espaco para entrar: bom desempenho, pouca saturacao e
+# publico ainda perguntando pelo jogo. Velocidade/recencia ja entram via tendencia.
+def _calcular_score_oportunidade(
+    score_tendencia: float, score_saturacao: float, score_descoberta: float
+) -> float:
+    return _limitar(
+        score_tendencia * 0.40 + score_saturacao * 0.40 + score_descoberta * 0.20
+    )
 
 
 def _calcular_score_saturacao(canais_diferentes: int) -> float:
