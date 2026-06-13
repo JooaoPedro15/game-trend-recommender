@@ -112,6 +112,10 @@ def main(argv: list[str] | None = None) -> int:
         remover_watchlist_interativo(jogo)
         return 0
 
+    if comando == "ranking_watchlist":
+        ranking_watchlist_interativo(plataforma, top, desde)
+        return 0
+
     return 0
 
 
@@ -397,6 +401,45 @@ def remover_watchlist_interativo(nome_jogo: str) -> None:
         print(f"'{nome_jogo}' nao estava na watchlist.")
 
 
+# Cruza os nomes da watchlist com o ranking atual (match por nome, ignorando
+# maiusculas). Devolve, na ordem da watchlist, tuplas (nome, posicao, resultado);
+# posicao e resultado sao None quando o jogo nao esta no ranking.
+def cruzar_watchlist_com_ranking(nomes, ranking):
+    por_nome = {
+        resultado.jogo.nome.casefold(): (posicao, resultado)
+        for posicao, resultado in enumerate(ranking, start=1)
+    }
+    return [(nome, *por_nome.get(nome.casefold(), (None, None))) for nome in nomes]
+
+
+# Mostra como cada jogo da watchlist esta performando no ranking atual.
+def ranking_watchlist_interativo(
+    plataforma: str | None = None, top: int | None = None, desde: date | None = None
+) -> None:
+    nomes = listar_jogos(WATCHLIST_CSV)
+    if not nomes:
+        print("Watchlist vazia. Adicione jogos com adicionar_watchlist.")
+        return
+
+    ranking = _carregar_ranking(plataforma, top, desde)
+
+    print("=== Watchlist no Ranking Atual ===")
+    print()
+    for nome, posicao, resultado in cruzar_watchlist_com_ranking(nomes, ranking):
+        if resultado is None:
+            print(f"- {nome}: NAO aparece no ranking atual")
+            print()
+            continue
+        print(f"- {nome}: #{posicao} no ranking")
+        print(
+            f"  Score final: {resultado.score_final:.1f} | "
+            f"Oportunidade: {resultado.score_oportunidade:.1f}"
+        )
+        print(f"  Acao recomendada: {resultado.acao_recomendada}")
+        print(f"  Motivo: {resultado.motivo}")
+        print()
+
+
 def adicionar_video_interativo() -> None:
     print("=== Adicionar Video Manual ===")
     print()
@@ -580,6 +623,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         "remover_watchlist", help="Remove um jogo da watchlist."
     )
     remover_wl.add_argument("jogo", help="Nome do jogo a remover.")
+
+    ranking_wl = subcomandos.add_parser(
+        "ranking_watchlist",
+        help="Mostra como os jogos da watchlist aparecem no ranking atual.",
+    )
+    _adicionar_filtros(ranking_wl)
 
     return parser
 
