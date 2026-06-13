@@ -16,12 +16,14 @@ from diagnostico_dados import (
     imprimir_diagnostico,
     imprimir_videos_sem_jogo,
 )
+from historico_ranking import salvar_snapshot
 
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
 VIDEOS_CSV = DATA_DIR / "videos_coletados.csv"
+HISTORICO_CSV = DATA_DIR / "historico_rankings.csv"
 REPORTS_DIR = BASE_DIR / "reports"
 RANKING_REPORT = REPORTS_DIR / "ranking.md"
 
@@ -81,6 +83,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "coletar_canal_youtube":
         coletar_canal_youtube_interativo(channel_id, limite)
+        return 0
+
+    if comando == "salvar_snapshot_ranking":
+        salvar_snapshot_ranking_interativo(plataforma, top, desde)
         return 0
 
     return 0
@@ -281,6 +287,20 @@ def coletar_canal_youtube_interativo(channel_id: str, limite: int) -> None:
     print(f"Erros: {resumo['erros']}")
 
 
+# Calcula o ranking (com os filtros atuais) e acrescenta um snapshot ao historico.
+def salvar_snapshot_ranking_interativo(
+    plataforma: str | None = None, top: int | None = None, desde: date | None = None
+) -> None:
+    ranking = _carregar_ranking(plataforma, top, desde)
+    if not ranking:
+        print("Nenhum jogo no ranking; snapshot nao foi salvo.")
+        return
+
+    salvos = salvar_snapshot(HISTORICO_CSV, ranking)
+    print(f"Snapshot salvo em: {HISTORICO_CSV}")
+    print(f"Jogos registrados: {salvos}")
+
+
 def adicionar_video_interativo() -> None:
     print("=== Adicionar Video Manual ===")
     print()
@@ -435,6 +455,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         default=5,
         help="Quantos videos recentes coletar (padrao: 5).",
     )
+
+    snapshot = subcomandos.add_parser(
+        "salvar_snapshot_ranking",
+        help="Calcula o ranking e acrescenta um snapshot ao historico.",
+    )
+    _adicionar_filtros(snapshot)
 
     return parser
 
