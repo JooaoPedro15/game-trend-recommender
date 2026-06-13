@@ -16,7 +16,7 @@ from diagnostico_dados import (
     imprimir_diagnostico,
     imprimir_videos_sem_jogo,
 )
-from historico_ranking import salvar_snapshot
+from historico_ranking import comparar_ultimas_execucoes, imprimir_comparacao, salvar_snapshot
 
 
 
@@ -87,6 +87,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "salvar_snapshot_ranking":
         salvar_snapshot_ranking_interativo(plataforma, top, desde)
+        return 0
+
+    if comando == "comparar_rankings":
+        comparar_rankings_interativo()
         return 0
 
     return 0
@@ -301,6 +305,19 @@ def salvar_snapshot_ranking_interativo(
     print(f"Jogos registrados: {salvos}")
 
 
+# Compara as duas ultimas execucoes salvas no historico de rankings.
+def comparar_rankings_interativo() -> None:
+    comparacao = comparar_ultimas_execucoes(HISTORICO_CSV)
+    if comparacao is None:
+        print(
+            "Historico insuficiente para comparar: sao necessarias pelo menos duas "
+            "execucoes de salvar_snapshot_ranking."
+        )
+        return
+
+    imprimir_comparacao(comparacao)
+
+
 def adicionar_video_interativo() -> None:
     print("=== Adicionar Video Manual ===")
     print()
@@ -461,6 +478,11 @@ def _construir_parser() -> argparse.ArgumentParser:
         help="Calcula o ranking e acrescenta um snapshot ao historico.",
     )
     _adicionar_filtros(snapshot)
+
+    subcomandos.add_parser(
+        "comparar_rankings",
+        help="Compara as duas ultimas execucoes salvas no historico.",
+    )
 
     return parser
 
