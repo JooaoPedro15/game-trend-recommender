@@ -25,6 +25,8 @@ It is an early MVP and a future building block of a larger "Creator Intelligence
 - Batch import of videos from an external CSV, with per-row validation and a summary.
 - Data-quality diagnostics, plus a list of videos with no detected game.
 - Alias management to grow game detection from real data.
+- Monitoring tools: ranking history snapshots, snapshot comparison (rose/fell/new/gone),
+  an opportunity shortlist and a personal watchlist — see [`docs/monitoring.md`](docs/monitoring.md).
 - **Optional:** collect videos from YouTube (Data API v3) — by video id, in batch from an
   id file, or a channel's recent uploads — with a local cache to save API quota.
 
@@ -93,8 +95,19 @@ ranking ordered by final score.
 | `coletar_video_youtube <video_id>` | Fetch one video from YouTube by id and save it to the CSV (**needs `YOUTUBE_API_KEY`**). |
 | `coletar_videos_youtube <ids.txt>` | Batch-fetch YouTube videos from a file with one video id per line (**needs `YOUTUBE_API_KEY`**). |
 | `coletar_canal_youtube <channel_id> [--limite N]` | Fetch a channel's recent uploads (default 5) and save them (**needs `YOUTUBE_API_KEY`**). |
+| `oportunidades` | List only the games with high opportunity potential (a filtered shortlist). |
+| `salvar_snapshot_ranking` | Append the current ranking to a timestamped history CSV. |
+| `comparar_rankings` | Compare the two most recent saved snapshots (who rose, fell, is new or gone). |
+| `adicionar_watchlist "<jogo>"` | Add a game to your personal watchlist. |
+| `listar_watchlist` | List the games on the watchlist. |
+| `remover_watchlist "<jogo>"` | Remove a game from the watchlist. |
+| `ranking_watchlist` | Show how each watchlist game ranks right now. |
 
-Shared options for `ranking` and `exportar_ranking`:
+See [`docs/monitoring.md`](docs/monitoring.md) for the history / comparison / watchlist
+workflow and the recommended routine.
+
+Shared options for `ranking`, `exportar_ranking`, `oportunidades`,
+`salvar_snapshot_ranking` and `ranking_watchlist`:
 
 | Option | Description |
 |--------|-------------|
@@ -113,9 +126,10 @@ auto-generated help.
 
 ## YouTube Data API (optional)
 
-Only one command touches the network: `coletar_video_youtube`. Everything else —
-ranking, CSV import, diagnostics, orphan listing, alias management and report export —
-works fully offline from the local CSVs, with **no API key**.
+Only the YouTube collectors (`coletar_video_youtube`, `coletar_videos_youtube`,
+`coletar_canal_youtube`) touch the network. Everything else — ranking, history,
+watchlist, CSV import, diagnostics, alias management and report export — works fully
+offline from the local CSVs, with **no API key**.
 
 **Setup:**
 
