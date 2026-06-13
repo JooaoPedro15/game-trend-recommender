@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from modelos import CanalReferencia, JogoSeed, VideoColetado
 from ranker import calcular_ranking, _calcular_bonus_velocidade
 from main import imprimir_ranking
+from metricas_video import calcular_views_por_dia
 from datetime import date, timedelta
 
 
@@ -150,9 +151,13 @@ class TestRanker(unittest.TestCase):
 
         texto = saida.getvalue()
         self.assertIn("Videos que influenciaram:", texto)
+        # views/dia depende da data de hoje, entao o valor esperado e calculado
+        # com a mesma funcao central para o teste nao quebrar com o passar dos dias.
+        views_por_dia = calcular_views_por_dia(video)
         self.assertIn(
             "Core | youtube | 800000 views | 90000 likes | 1200 comentarios | "
-            "11.4% engajamento | 2026-05-18 | Esse jogo de terror me quebrou",
+            f"11.4% engajamento | {views_por_dia:.0f} views/dia | "
+            "2026-05-18 | Esse jogo de terror me quebrou",
             texto,
         )
         self.assertIn("https://youtube.com/shorts/exemplo", texto)

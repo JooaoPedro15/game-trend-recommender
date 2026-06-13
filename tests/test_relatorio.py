@@ -53,3 +53,4 @@ def test_gera_relatorio_markdown_com_informacoes_principais(tmp_path):
     assert "Jogo apareceu em video recente com alto engajamento." in conteudo
     assert "800000 views" in conteudo
     assert "11.4% engajamento" in conteudo
+    assert "views/dia" in conteudo

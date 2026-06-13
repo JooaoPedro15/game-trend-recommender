@@ -9,7 +9,7 @@ from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletad
 from modelos import VideoColetado
 from ranker import calcular_ranking
 from relatorio import gerar_relatorio_csv, gerar_relatorio_markdown
-from metricas_video import calcular_taxa_engajamento
+from metricas_video import calcular_taxa_engajamento, calcular_views_por_dia
 from diagnostico_dados import (
     encontrar_videos_sem_jogo,
     gerar_diagnostico,
@@ -164,11 +164,13 @@ def imprimir_ranking(ranking) -> None:
         print("Videos que influenciaram:")
         for video in resultado.videos:
             taxa_engajamento = calcular_taxa_engajamento(video) * 100
+            views_por_dia = calcular_views_por_dia(video)
             print(
                 f"- {video.canal} | {video.plataforma} | "
                 f"{video.views} views | {video.likes} likes | "
                 f"{video.comentarios} comentarios | "
                 f"{taxa_engajamento:.1f}% engajamento | "
+                f"{views_por_dia:.0f} views/dia | "
                 f"{video.data_publicacao} | {video.titulo}"
             )
             print(f"  {video.url}")

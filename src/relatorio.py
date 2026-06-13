@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 
-from metricas_video import calcular_taxa_engajamento
+from metricas_video import calcular_taxa_engajamento, calcular_views_por_dia
 
 
 # Gera um relatorio em Markdown com os resultados do ranking.
@@ -34,11 +34,13 @@ def gerar_relatorio_markdown(caminho: str | Path, ranking) -> None:
 
             for video in resultado.videos:
                 taxa_engajamento = calcular_taxa_engajamento(video) * 100
+                views_por_dia = calcular_views_por_dia(video)
                 linhas.append(
                     f"- {video.canal} | {video.plataforma} | "
                     f"{video.views} views | {video.likes} likes | "
                     f"{video.comentarios} comentarios | "
                     f"{taxa_engajamento:.1f}% engajamento | "
+                    f"{views_por_dia:.0f} views/dia | "
                     f"{video.data_publicacao} | {video.titulo}"
                 )
                 linhas.append(f"  - {video.url}")
