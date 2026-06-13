@@ -7,7 +7,7 @@ from cadastro_jogo import adicionar_alias_jogo
 from coletor_youtube import CACHE_PADRAO, coletar_canal, coletar_video_por_id, coletar_videos_por_ids
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
-from ranker import calcular_ranking
+from ranker import calcular_ranking, filtrar_oportunidades
 from relatorio import gerar_relatorio_csv, gerar_relatorio_markdown
 from metricas_video import calcular_taxa_engajamento, calcular_views_por_dia
 from diagnostico_dados import (
@@ -91,6 +91,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "comparar_rankings":
         comparar_rankings_interativo()
+        return 0
+
+    if comando == "oportunidades":
+        mostrar_oportunidades(plataforma, top, desde)
         return 0
 
     return 0
@@ -305,6 +309,33 @@ def salvar_snapshot_ranking_interativo(
     print(f"Jogos registrados: {salvos}")
 
 
+# Mostra apenas os jogos do ranking que passam nos criterios de oportunidade prioritaria.
+def mostrar_oportunidades(
+    plataforma: str | None = None, top: int | None = None, desde: date | None = None
+) -> None:
+    ranking = _carregar_ranking(plataforma, top, desde)
+    oportunidades = filtrar_oportunidades(ranking)
+
+    print("=== Oportunidades Prioritarias ===")
+    print()
+
+    if not oportunidades:
+        print("Nenhum jogo passou nos criterios de oportunidade no momento.")
+        print("Criterios: oportunidade >= 70, score final >= 60, saturacao >= 55.")
+        return
+
+    for posicao, resultado in oportunidades:
+        print(f"#{posicao} no ranking | {resultado.jogo.nome}")
+        print(
+            f"  Score final: {resultado.score_final:.1f} | "
+            f"Oportunidade: {resultado.score_oportunidade:.1f} | "
+            f"Saturacao: {resultado.score_saturacao:.1f}"
+        )
+        print(f"  Acao recomendada: {resultado.acao_recomendada}")
+        print(f"  Motivo: {resultado.motivo}")
+        print()
+
+
 # Compara as duas ultimas execucoes salvas no historico de rankings.
 def comparar_rankings_interativo() -> None:
     comparacao = comparar_ultimas_execucoes(HISTORICO_CSV)
@@ -483,6 +514,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         "comparar_rankings",
         help="Compara as duas ultimas execucoes salvas no historico.",
     )
+
+    oportunidades = subcomandos.add_parser(
+        "oportunidades",
+        help="Lista apenas os jogos com alto potencial de oportunidade.",
+    )
+    _adicionar_filtros(oportunidades)
 
     return parser
 

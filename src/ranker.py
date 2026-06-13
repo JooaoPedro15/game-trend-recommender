@@ -101,6 +101,22 @@ def calcular_ranking(
     return sorted(resultados, key=lambda resultado: resultado.score_final, reverse=True)
 
 
+# Filtra o ranking para apenas as oportunidades prioritarias, preservando a posicao
+# original de cada jogo. Criterios heuristicos do MVP (calibrar depois): bom score
+# geral, oportunidade alta, pouca saturacao e pelo menos um video coletado.
+def filtrar_oportunidades(
+    ranking: list[ResultadoRecomendacao],
+) -> list[tuple[int, ResultadoRecomendacao]]:
+    return [
+        (posicao, resultado)
+        for posicao, resultado in enumerate(ranking, start=1)
+        if resultado.score_oportunidade >= 70
+        and resultado.score_final >= 60
+        and resultado.score_saturacao >= 55
+        and resultado.videos_encontrados >= 1
+    ]
+
+
 def _agrupar_videos_por_jogo(
     jogos: list[JogoSeed], videos: list[VideoColetado]
 ) -> dict[str, list[VideoColetado]]:
