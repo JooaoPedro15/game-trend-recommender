@@ -44,3 +44,4 @@ class ResultadoRecomendacao:
     motivo: str
     videos: list[VideoColetado]
     score_oportunidade: float = 0.0
+    acao_recomendada: str = ""

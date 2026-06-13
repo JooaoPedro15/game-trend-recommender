@@ -40,6 +40,7 @@ def test_gera_relatorio_markdown_com_informacoes_principais(tmp_path):
         motivo="Jogo apareceu em video recente com alto engajamento.",
         videos=[video],
         score_oportunidade=74.0,
+        acao_recomendada="Testar em Short",
     )
 
     caminho = tmp_path / "ranking.md"
@@ -52,6 +53,7 @@ def test_gera_relatorio_markdown_com_informacoes_principais(tmp_path):
     assert "R.E.P.O." in conteudo
     assert "Score final: 82.0" in conteudo
     assert "Oportunidade: 74.0" in conteudo
+    assert "Acao recomendada: Testar em Short" in conteudo
     assert "Jogo apareceu em video recente com alto engajamento." in conteudo
     assert "800000 views" in conteudo
     assert "11.4% engajamento" in conteudo

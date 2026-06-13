@@ -161,6 +161,7 @@ def imprimir_ranking(ranking) -> None:
         print(f"Videos encontrados: {resultado.videos_encontrados}")
         print(f"Canais diferentes: {resultado.canais_diferentes}")
         print(f"Motivo: {resultado.motivo}")
+        print(f"Acao recomendada: {resultado.acao_recomendada}")
         print()
         print("Videos que influenciaram:")
         for video in resultado.videos:

@@ -13,6 +13,7 @@ from ranker import (
     calcular_ranking,
     _calcular_bonus_velocidade,
     _calcular_score_oportunidade,
+    _gerar_acao_recomendada,
     peso_base_plataforma,
 )
 from main import imprimir_ranking
@@ -516,6 +517,52 @@ def test_motivo_indica_pouca_evidencia():
     resultado_fraco = next(r for r in ranking if r.jogo.nome == "Game Fraco")
 
     assert "pouca evidencia" in resultado_fraco.motivo
+
+
+# Uma acao por regra, na ordem de prioridade (veto por saturacao primeiro).
+def test_acao_recomendada_cobre_as_regras():
+    # saturacao <= 40 veta, mesmo com oportunidade e fit altos
+    assert (
+        _gerar_acao_recomendada(80.0, 90.0, 40.0, 100.0, 5)
+        == "Evitar por saturacao alta"
+    )
+    # oportunidade alta + fit alto = aposta maxima
+    assert (
+        _gerar_acao_recomendada(80.0, 90.0, 90.0, 100.0, 3)
+        == "Priorizar para video longo"
+    )
+    # oportunidade alta sem fit = validar barato
+    assert _gerar_acao_recomendada(80.0, 60.0, 90.0, 100.0, 3) == "Testar em Short"
+    # um video so e tendencia fraca = falta evidencia
+    assert (
+        _gerar_acao_recomendada(50.0, 90.0, 90.0, 30.0, 1)
+        == "Pesquisar mais videos antes de gravar"
+    )
+    # caso neutro = observar
+    assert (
+        _gerar_acao_recomendada(50.0, 60.0, 75.0, 80.0, 3)
+        == "Monitorar por mais alguns dias"
+    )
+
+
+# O ranking preenche acao_recomendada (nunca sai vazia).
+def test_ranking_preenche_acao_recomendada():
+    jogo = JogoSeed(nome="Game Acao", aliases=[], genero="terror", fit_inicial=9.0)
+    video = VideoColetado(
+        titulo="Game Acao viralizou",
+        canal="Canal Teste",
+        plataforma="youtube",
+        url="https://youtube.com/acao",
+        views=100000,
+        likes=9000,
+        comentarios=1500,
+        data_publicacao=date.today().isoformat(),
+        texto_comentarios="",
+    )
+
+    resultado = calcular_ranking([jogo], [video], [])[0]
+
+    assert resultado.acao_recomendada == "Priorizar para video longo"
 
 
 if __name__ == "__main__":

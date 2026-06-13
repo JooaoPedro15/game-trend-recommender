@@ -29,6 +29,7 @@ def gerar_relatorio_markdown(caminho: str | Path, ranking) -> None:
             linhas.append(f"Canais diferentes: {resultado.canais_diferentes}")
             linhas.append("")
             linhas.append(f"Motivo: {resultado.motivo}")
+            linhas.append(f"Acao recomendada: {resultado.acao_recomendada}")
             linhas.append("")
             linhas.append("### Videos que influenciaram")
             linhas.append("")
@@ -63,6 +64,7 @@ CAMPOS_CSV = [
     "videos_encontrados",
     "canais_diferentes",
     "motivo",
+    "acao_recomendada",
 ]
 
 
@@ -88,5 +90,6 @@ def gerar_relatorio_csv(caminho: str | Path, ranking) -> None:
                     "videos_encontrados": resultado.videos_encontrados,
                     "canais_diferentes": resultado.canais_diferentes,
                     "motivo": resultado.motivo,
+                    "acao_recomendada": resultado.acao_recomendada,
                 }
             )

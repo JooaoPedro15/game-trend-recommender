@@ -88,6 +88,13 @@ def calcular_ranking(
                 ),
                 videos=videos_ordenados,
                 score_oportunidade=round(score_oportunidade, 1),
+                acao_recomendada=_gerar_acao_recomendada(
+                    score_oportunidade,
+                    score_fit_canal,
+                    score_saturacao,
+                    score_tendencia,
+                    len(videos_jogo),
+                ),
             )
         )
 
@@ -193,6 +200,30 @@ def _calcular_score_descoberta(videos: list[VideoColetado]) -> float:
     proporcao_videos = videos_com_sinal / len(videos)
     bonus_repeticao = min(total_sinais, 3) * 10
     return _limitar(proporcao_videos * 70 + bonus_repeticao)
+
+
+# Traduz os scores em um proximo passo pratico para o creator. Regras simples,
+# em ordem de prioridade: veto por saturacao vem antes de qualquer "priorizar".
+def _gerar_acao_recomendada(
+    score_oportunidade: float,
+    score_fit_canal: float,
+    score_saturacao: float,
+    score_tendencia: float,
+    videos_encontrados: int,
+) -> str:
+    if score_saturacao <= 40:
+        return "Evitar por saturacao alta"
+
+    if score_oportunidade >= 75 and score_fit_canal >= 80:
+        return "Priorizar para video longo"
+
+    if score_oportunidade >= 75:
+        return "Testar em Short"
+
+    if videos_encontrados <= 1 and score_tendencia < 70:
+        return "Pesquisar mais videos antes de gravar"
+
+    return "Monitorar por mais alguns dias"
 
 
 # Combina performance com espaco para entrar: bom desempenho, pouca saturacao e
