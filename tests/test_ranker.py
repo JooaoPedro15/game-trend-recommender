@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from modelos import CanalReferencia, JogoSeed, VideoColetado
-from ranker import calcular_ranking, _calcular_bonus_velocidade
+from ranker import calcular_ranking, _calcular_bonus_velocidade, peso_base_plataforma
 from main import imprimir_ranking
 from metricas_video import calcular_views_por_dia
 from datetime import date, timedelta
@@ -347,6 +347,56 @@ def test_bonus_velocidade_nao_ultrapassa_metade_das_views():
     )
 
     assert _calcular_bonus_velocidade(video) == 50000.0
+
+
+# Pesos por plataforma: valores da tabela, case-insensitive e neutro para desconhecida.
+def test_peso_base_plataforma():
+    assert peso_base_plataforma("youtube") == 1.0
+    assert peso_base_plataforma("YouTube") == 1.0
+    assert peso_base_plataforma("shorts") == 0.9
+    assert peso_base_plataforma(" TikTok ") == 0.8
+    assert peso_base_plataforma("instagram") == 0.8
+    assert peso_base_plataforma("twitch") == 1.0
+
+
+# Mesmos numeros em plataformas diferentes: o video do YouTube deve pesar mais.
+def test_ranking_pesa_views_do_youtube_mais_que_tiktok():
+    hoje = date.today().isoformat()
+
+    jogo_youtube = JogoSeed(nome="Game Youtube", aliases=[], genero="terror", fit_inicial=8.0)
+    jogo_tiktok = JogoSeed(nome="Game Tiktok", aliases=[], genero="terror", fit_inicial=8.0)
+
+    video_youtube = VideoColetado(
+        titulo="Game Youtube viralizou",
+        canal="Canal Teste",
+        plataforma="youtube",
+        url="https://youtube.com/igual",
+        views=100000,
+        likes=1000,
+        comentarios=100,
+        data_publicacao=hoje,
+        texto_comentarios="",
+    )
+    video_tiktok = VideoColetado(
+        titulo="Game Tiktok viralizou",
+        canal="Canal Teste",
+        plataforma="tiktok",
+        url="https://tiktok.com/igual",
+        views=100000,
+        likes=1000,
+        comentarios=100,
+        data_publicacao=hoje,
+        texto_comentarios="",
+    )
+
+    ranking = calcular_ranking(
+        [jogo_youtube, jogo_tiktok],
+        [video_youtube, video_tiktok],
+        [],
+    )
+
+    assert ranking[0].jogo.nome == "Game Youtube"
+    assert ranking[0].score_tendencia > ranking[1].score_tendencia
 
 
 if __name__ == "__main__":

@@ -114,18 +114,34 @@ def _calcular_tendencia_bruta(
     return total
 
 
+# Pesos iniciais do MVP: views de plataformas de autoplay (TikTok/Reels) valem um
+# pouco menos que views do YouTube. Calibrar depois, comparando com resultados reais.
+PESOS_PLATAFORMA = {
+    "youtube": 1.0,
+    "shorts": 0.9,
+    "tiktok": 0.8,
+    "instagram": 0.8,
+}
+
+
+# Retorna o peso base da plataforma (1.0 para plataformas desconhecidas).
+def peso_base_plataforma(plataforma: str) -> float:
+    return PESOS_PLATAFORMA.get(plataforma.strip().casefold(), 1.0)
+
+
 def _score_video(video: VideoColetado) -> float:
     taxa_engajamento = calcular_taxa_engajamento(video)
     bonus_engajamento = video.views * taxa_engajamento * 2
     bonus_velocidade = _calcular_bonus_velocidade(video)
 
-    return (
+    score_bruto = (
         video.views
         + video.likes * 5
         + video.comentarios * 20
         + bonus_engajamento
         + bonus_velocidade
     )
+    return score_bruto * peso_base_plataforma(video.plataforma)
 
 
 def _calcular_bonus_velocidade(video: VideoColetado) -> float:
