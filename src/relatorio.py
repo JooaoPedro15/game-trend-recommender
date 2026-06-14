@@ -2,6 +2,7 @@ import csv
 from pathlib import Path
 
 from metricas_video import calcular_taxa_engajamento, calcular_views_por_dia
+from evidencias_jogo import gerar_evidencias, resumir_evidencia_criadores
 
 
 # Gera um relatorio em Markdown com os resultados do ranking.
@@ -96,3 +97,49 @@ def gerar_relatorio_csv(caminho: str | Path, ranking) -> None:
                     "acao_recomendada": resultado.acao_recomendada,
                 }
             )
+
+
+# Gera um relatorio em Markdown com os jogos ranqueados e os videos/criadores que
+# servem de evidencia para cada um, ordenado pelo score de evidencia de criadores.
+def gerar_relatorio_evidencias_markdown(caminho: str | Path, ranking) -> None:
+    caminho = Path(caminho)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+
+    evidencias_por_jogo = gerar_evidencias(ranking)
+    jogos_ordenados = sorted(
+        ranking, key=lambda r: r.score_evidencia_criadores, reverse=True
+    )
+
+    linhas = []
+    linhas.append("# Evidencias por Jogo")
+    linhas.append("")
+
+    if not jogos_ordenados:
+        linhas.append("Nenhum jogo foi detectado nos videos coletados.")
+    else:
+        for posicao, resultado in enumerate(jogos_ordenados, start=1):
+            evidencias = evidencias_por_jogo.get(resultado.jogo.nome, [])
+            linhas.append(f"## {posicao}. {resultado.jogo.nome}")
+            linhas.append("")
+            linhas.append(
+                f"Score de evidencia: {resultado.score_evidencia_criadores:.1f}"
+            )
+            linhas.append(f"Resumo: {resumir_evidencia_criadores(evidencias)}")
+            linhas.append("")
+            linhas.append("### Videos que servem de evidencia")
+            linhas.append("")
+
+            for ordem, evidencia in enumerate(evidencias, start=1):
+                linhas.append(
+                    f"{ordem}. {evidencia.canal} | {evidencia.plataforma} | "
+                    f"{evidencia.tipo_video} | {evidencia.views} views | "
+                    f"{evidencia.taxa_engajamento:.1f}% engajamento | "
+                    f"{evidencia.views_por_dia:.0f} views/dia | "
+                    f"viralidade {evidencia.score_viralidade_video:.1f}"
+                )
+                linhas.append(f"   - Titulo: {evidencia.titulo}")
+                linhas.append(f"   - Link: {evidencia.url}")
+
+            linhas.append("")
+
+    caminho.write_text("\n".join(linhas), encoding="utf-8")

@@ -8,7 +8,11 @@ from coletor_youtube import CACHE_PADRAO, coletar_canal, coletar_video_por_id, c
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
-from relatorio import gerar_relatorio_csv, gerar_relatorio_markdown
+from relatorio import (
+    gerar_relatorio_csv,
+    gerar_relatorio_evidencias_markdown,
+    gerar_relatorio_markdown,
+)
 from metricas_video import calcular_taxa_engajamento, calcular_views_por_dia
 from diagnostico_dados import (
     encontrar_videos_sem_jogo,
@@ -125,6 +129,10 @@ def main(argv: list[str] | None = None) -> int:
         evidencias_jogo_interativo(jogo)
         return 0
 
+    if comando == "exportar_evidencias_jogos":
+        exportar_evidencias_jogos(plataforma, top, desde)
+        return 0
+
     return 0
 
 
@@ -180,6 +188,21 @@ def exportar_ranking(
     else:
         caminho_relatorio = REPORTS_DIR / f"ranking_{data_hora}.md"
         gerar_relatorio_markdown(caminho_relatorio, ranking)
+
+    print(f"Relatorio gerado em: {caminho_relatorio}")
+
+
+# Exporta para Markdown, com data e hora, os jogos e os videos/criadores que servem de evidencia.
+def exportar_evidencias_jogos(
+    plataforma: str | None = None,
+    top: int | None = None,
+    desde: date | None = None,
+) -> None:
+    ranking = _carregar_ranking(plataforma, top, desde)
+
+    data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    caminho_relatorio = REPORTS_DIR / f"evidencias_jogos_{data_hora}.md"
+    gerar_relatorio_evidencias_markdown(caminho_relatorio, ranking)
 
     print(f"Relatorio gerado em: {caminho_relatorio}")
 
@@ -683,6 +706,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         help="Lista os criadores/videos detectados para um jogo especifico.",
     )
     evidencias.add_argument("jogo", help="Nome do jogo (igual ao do jogos_seed.csv).")
+
+    exportar_evidencias = subcomandos.add_parser(
+        "exportar_evidencias_jogos",
+        help="Exporta para Markdown os jogos e os videos/criadores que servem de evidencia.",
+    )
+    _adicionar_filtros(exportar_evidencias)
 
     return parser
 
