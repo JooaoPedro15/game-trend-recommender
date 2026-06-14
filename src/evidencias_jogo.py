@@ -21,10 +21,15 @@ class EvidenciaVideo:
     views_por_dia: float
     score_viralidade_video: float
     data_publicacao: str
+    nicho: str = "desconhecido"           # nicho do canal de referencia
+    tipo_conteudo: str = "desconhecido"   # formato dominante do canal
+    peso_similaridade: float = 1.0        # quao parecido o canal e do nosso nicho
 
 
-# Monta a evidencia de um video, reusando as metricas centralizadas.
-def evidencia_de_video(video) -> EvidenciaVideo:
+# Monta a evidencia de um video, reusando as metricas centralizadas. Se o canal de
+# referencia for informado, anexa nicho/tipo_conteudo/peso_similaridade dele; senao
+# usa os padroes ("desconhecido"/1.0), mantendo o comportamento antigo.
+def evidencia_de_video(video, canal=None) -> EvidenciaVideo:
     return EvidenciaVideo(
         canal=video.canal,
         plataforma=video.plataforma,
@@ -38,16 +43,23 @@ def evidencia_de_video(video) -> EvidenciaVideo:
         views_por_dia=round(calcular_views_por_dia(video), 1),
         score_viralidade_video=calcular_score_viralidade_video(video),
         data_publicacao=video.data_publicacao,
+        nicho=canal.nicho if canal else "desconhecido",
+        tipo_conteudo=canal.tipo_conteudo if canal else "desconhecido",
+        peso_similaridade=canal.peso_similaridade if canal else 1.0,
     )
 
 
 # Para cada jogo do ranking, monta a lista de evidencias dos videos detectados,
 # ordenada por score_viralidade_video (maior primeiro). Devolve nome_jogo -> lista,
 # preservando a ordem do ranking.
-def gerar_evidencias(ranking) -> dict[str, list[EvidenciaVideo]]:
+def gerar_evidencias(ranking, canais=None) -> dict[str, list[EvidenciaVideo]]:
+    mapa_canais = {canal.nome.casefold(): canal for canal in (canais or [])}
     evidencias = {}
     for resultado in ranking:
-        videos = [evidencia_de_video(video) for video in resultado.videos]
+        videos = [
+            evidencia_de_video(video, mapa_canais.get(video.canal.casefold()))
+            for video in resultado.videos
+        ]
         videos.sort(key=lambda evidencia: evidencia.score_viralidade_video, reverse=True)
         evidencias[resultado.jogo.nome] = videos
     return evidencias
@@ -65,9 +77,11 @@ def imprimir_evidencias(evidencias: dict[str, list[EvidenciaVideo]]) -> None:
         for evidencia in videos:
             print(
                 f"  [viral {evidencia.score_viralidade_video:.0f}] "
-                f"{evidencia.canal} | {evidencia.plataforma} | {evidencia.tipo_video} | "
+                f"{evidencia.canal} | {evidencia.nicho} | {evidencia.tipo_conteudo} | "
+                f"{evidencia.plataforma} | {evidencia.tipo_video} | "
                 f"{evidencia.views} views | {evidencia.taxa_engajamento:.1f}% eng | "
-                f"{evidencia.views_por_dia:.0f} views/dia | {evidencia.data_publicacao}"
+                f"{evidencia.views_por_dia:.0f} views/dia | "
+                f"sim {evidencia.peso_similaridade:.1f} | {evidencia.data_publicacao}"
             )
             print(f"    {evidencia.titulo}")
             print(f"    {evidencia.url}")

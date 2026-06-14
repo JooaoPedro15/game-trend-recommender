@@ -199,10 +199,11 @@ def exportar_evidencias_jogos(
     desde: date | None = None,
 ) -> None:
     ranking = _carregar_ranking(plataforma, top, desde)
+    canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
 
     data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
     caminho_relatorio = REPORTS_DIR / f"evidencias_jogos_{data_hora}.md"
-    gerar_relatorio_evidencias_markdown(caminho_relatorio, ranking)
+    gerar_relatorio_evidencias_markdown(caminho_relatorio, ranking, canais)
 
     print(f"Relatorio gerado em: {caminho_relatorio}")
 
@@ -476,7 +477,8 @@ def ranking_watchlist_interativo(
 # Mostra os criadores/videos detectados para um jogo especifico, por viralidade.
 def evidencias_jogo_interativo(nome_jogo: str) -> None:
     ranking = _carregar_ranking()
-    evidencias_por_jogo = gerar_evidencias(ranking)
+    canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
+    evidencias_por_jogo = gerar_evidencias(ranking, canais)
 
     alvo = nome_jogo.strip().casefold()
     encontrado = next(
@@ -494,9 +496,11 @@ def evidencias_jogo_interativo(nome_jogo: str) -> None:
     print("Videos:")
     for posicao, evidencia in enumerate(evidencias, start=1):
         print(
-            f"{posicao}. {evidencia.canal} | {evidencia.plataforma} | "
+            f"{posicao}. {evidencia.canal} | {evidencia.nicho} | "
+            f"{evidencia.tipo_conteudo} | {evidencia.plataforma} | "
             f"{evidencia.tipo_video} | {evidencia.views} views | "
             f"{evidencia.taxa_engajamento:.1f}% engajamento | "
+            f"similaridade {evidencia.peso_similaridade:.1f} | "
             f"score {evidencia.score_viralidade_video:.1f}"
         )
         print(f"   Titulo: {evidencia.titulo}")

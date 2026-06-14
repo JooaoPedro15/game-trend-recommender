@@ -101,11 +101,13 @@ def gerar_relatorio_csv(caminho: str | Path, ranking) -> None:
 
 # Gera um relatorio em Markdown com os jogos ranqueados e os videos/criadores que
 # servem de evidencia para cada um, ordenado pelo score de evidencia de criadores.
-def gerar_relatorio_evidencias_markdown(caminho: str | Path, ranking) -> None:
+def gerar_relatorio_evidencias_markdown(
+    caminho: str | Path, ranking, canais=None
+) -> None:
     caminho = Path(caminho)
     caminho.parent.mkdir(parents=True, exist_ok=True)
 
-    evidencias_por_jogo = gerar_evidencias(ranking)
+    evidencias_por_jogo = gerar_evidencias(ranking, canais)
     jogos_ordenados = sorted(
         ranking, key=lambda r: r.score_evidencia_criadores, reverse=True
     )
@@ -131,10 +133,12 @@ def gerar_relatorio_evidencias_markdown(caminho: str | Path, ranking) -> None:
 
             for ordem, evidencia in enumerate(evidencias, start=1):
                 linhas.append(
-                    f"{ordem}. {evidencia.canal} | {evidencia.plataforma} | "
+                    f"{ordem}. {evidencia.canal} | {evidencia.nicho} | "
+                    f"{evidencia.tipo_conteudo} | {evidencia.plataforma} | "
                     f"{evidencia.tipo_video} | {evidencia.views} views | "
                     f"{evidencia.taxa_engajamento:.1f}% engajamento | "
                     f"{evidencia.views_por_dia:.0f} views/dia | "
+                    f"similaridade {evidencia.peso_similaridade:.1f} | "
                     f"viralidade {evidencia.score_viralidade_video:.1f}"
                 )
                 linhas.append(f"   - Titulo: {evidencia.titulo}")
