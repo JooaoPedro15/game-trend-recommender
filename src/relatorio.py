@@ -25,6 +25,7 @@ def gerar_relatorio_markdown(caminho: str | Path, ranking) -> None:
             linhas.append(f"Descoberta: {resultado.score_descoberta:.1f}")
             linhas.append(f"Saturacao: {resultado.score_saturacao:.1f}")
             linhas.append(f"Oportunidade: {resultado.score_oportunidade:.1f}")
+            linhas.append(f"Evidencia criadores: {resultado.score_evidencia_criadores:.1f}")
             linhas.append(f"Videos encontrados: {resultado.videos_encontrados}")
             linhas.append(f"Canais diferentes: {resultado.canais_diferentes}")
             linhas.append("")
@@ -61,6 +62,7 @@ CAMPOS_CSV = [
     "score_descoberta",
     "score_saturacao",
     "score_oportunidade",
+    "score_evidencia_criadores",
     "videos_encontrados",
     "canais_diferentes",
     "motivo",
@@ -87,6 +89,7 @@ def gerar_relatorio_csv(caminho: str | Path, ranking) -> None:
                     "score_descoberta": resultado.score_descoberta,
                     "score_saturacao": resultado.score_saturacao,
                     "score_oportunidade": resultado.score_oportunidade,
+                    "score_evidencia_criadores": resultado.score_evidencia_criadores,
                     "videos_encontrados": resultado.videos_encontrados,
                     "canais_diferentes": resultado.canais_diferentes,
                     "motivo": resultado.motivo,

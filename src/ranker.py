@@ -4,6 +4,7 @@ from datetime import date
 from metricas_video import calcular_taxa_engajamento, calcular_views_por_dia
 
 from detector_jogo import detectar_jogos_no_video
+from evidencias_jogo import calcular_score_evidencia_criadores, evidencia_de_video
 from modelos import (
     CanalReferencia,
     JogoSeed,
@@ -66,6 +67,9 @@ def calcular_ranking(
         score_oportunidade = _calcular_score_oportunidade(
             score_tendencia, score_saturacao, score_descoberta
         )
+        score_evidencia = calcular_score_evidencia_criadores(
+            [evidencia_de_video(video) for video in videos_jogo]
+        )
 
         resultados.append(
             ResultadoRecomendacao(
@@ -95,6 +99,7 @@ def calcular_ranking(
                     score_tendencia,
                     len(videos_jogo),
                 ),
+                score_evidencia_criadores=round(score_evidencia, 1),
             )
         )
 
