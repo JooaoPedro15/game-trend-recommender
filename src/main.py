@@ -18,6 +18,11 @@ from diagnostico_dados import (
 )
 from historico_ranking import comparar_ultimas_execucoes, imprimir_comparacao, salvar_snapshot
 from watchlist import adicionar_jogo, listar_jogos, remover_jogo
+from evidencias_jogo import (
+    calcular_score_evidencia_criadores,
+    gerar_evidencias,
+    resumir_evidencia_criadores,
+)
 
 
 
@@ -114,6 +119,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "ranking_watchlist":
         ranking_watchlist_interativo(plataforma, top, desde)
+        return 0
+
+    if comando == "evidencias_jogo":
+        evidencias_jogo_interativo(jogo)
         return 0
 
     return 0
@@ -440,6 +449,37 @@ def ranking_watchlist_interativo(
         print()
 
 
+# Mostra os criadores/videos detectados para um jogo especifico, por viralidade.
+def evidencias_jogo_interativo(nome_jogo: str) -> None:
+    ranking = _carregar_ranking()
+    evidencias_por_jogo = gerar_evidencias(ranking)
+
+    alvo = nome_jogo.strip().casefold()
+    encontrado = next(
+        (nome for nome in evidencias_por_jogo if nome.casefold() == alvo), None
+    )
+    if encontrado is None or not evidencias_por_jogo[encontrado]:
+        print(f"Nenhum video encontrado para o jogo: {nome_jogo}")
+        return
+
+    evidencias = evidencias_por_jogo[encontrado]
+    print(f"Jogo: {encontrado}")
+    print(f"Score de evidencia: {calcular_score_evidencia_criadores(evidencias):.1f}")
+    print(f"Resumo: {resumir_evidencia_criadores(evidencias)}")
+    print()
+    print("Videos:")
+    for posicao, evidencia in enumerate(evidencias, start=1):
+        print(
+            f"{posicao}. {evidencia.canal} | {evidencia.plataforma} | "
+            f"{evidencia.tipo_video} | {evidencia.views} views | "
+            f"{evidencia.taxa_engajamento:.1f}% engajamento | "
+            f"score {evidencia.score_viralidade_video:.1f}"
+        )
+        print(f"   Titulo: {evidencia.titulo}")
+        print(f"   Link: {evidencia.url}")
+        print()
+
+
 def adicionar_video_interativo() -> None:
     print("=== Adicionar Video Manual ===")
     print()
@@ -636,6 +676,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         help="Mostra como os jogos da watchlist aparecem no ranking atual.",
     )
     _adicionar_filtros(ranking_wl)
+
+    evidencias = subcomandos.add_parser(
+        "evidencias_jogo",
+        help="Lista os criadores/videos detectados para um jogo especifico.",
+    )
+    evidencias.add_argument("jogo", help="Nome do jogo (igual ao do jogos_seed.csv).")
 
     return parser
 
