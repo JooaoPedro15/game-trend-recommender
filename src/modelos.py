@@ -7,6 +7,9 @@ class CanalReferencia:
     plataforma: str
     url: str
     peso: float
+    nicho: str = "desconhecido"
+    tipo_conteudo: str = "desconhecido"
+    peso_similaridade: float = 1.0
 
 
 @dataclass

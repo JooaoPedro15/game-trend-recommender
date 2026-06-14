@@ -12,6 +12,9 @@ def ler_canais_referencia(caminho: str | Path) -> list[CanalReferencia]:
             plataforma=linha.get("plataforma", "").strip(),
             url=linha.get("url", "").strip(),
             peso=_para_float(linha.get("peso"), 1.0),
+            nicho=linha.get("nicho", "").strip() or "desconhecido",
+            tipo_conteudo=linha.get("tipo_conteudo", "").strip() or "desconhecido",
+            peso_similaridade=_para_float(linha.get("peso_similaridade"), 1.0),
         )
         for linha in linhas
     ]

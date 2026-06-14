@@ -1,4 +1,4 @@
-nome,plataforma,url,peso
-Canal Referencia 1,youtube,https://youtube.com/@canal1,1.0
-Canal Referencia 2,tiktok,https://tiktok.com/@canal2,1.2
-Canal Referencia 3,instagram,https://instagram.com/canal3,0.8
+nome,plataforma,url,peso,nicho,tipo_conteudo,peso_similaridade
+Canal Referencia 1,youtube,https://youtube.com/@canal1,1.0,gaming_humor,gameplay,1.3
+Canal Referencia 2,tiktok,https://tiktok.com/@canal2,1.2,shorts_games,shorts,1.1
+Canal Referencia 3,instagram,https://instagram.com/canal3,0.8,review_games,review,0.7
