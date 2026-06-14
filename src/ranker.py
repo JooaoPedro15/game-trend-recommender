@@ -42,8 +42,13 @@ def calcular_ranking(
         return []
 
     pesos_canais = {canal.nome.casefold(): canal.peso for canal in canais}
+    pesos_similaridade = {
+        canal.nome.casefold(): canal.peso_similaridade for canal in canais
+    }
     tendencias_brutas = {
-        nome_jogo: _calcular_tendencia_bruta(videos_jogo, pesos_canais)
+        nome_jogo: _calcular_tendencia_bruta(
+            videos_jogo, pesos_canais, pesos_similaridade
+        )
         for nome_jogo, videos_jogo in agregados.items()
     }
     maior_tendencia = max(tendencias_brutas.values()) or 1.0
@@ -134,15 +139,24 @@ def _agrupar_videos_por_jogo(
     return dict(agregados)
 
 
+# A influencia de cada video soma: desempenho do video x peso do canal (autoridade)
+# x peso de similaridade (quao parecido o canal e do nosso nicho) x peso de recencia.
+# Canais sem esses pesos no CSV usam 1.0, mantendo o comportamento padrao.
 def _calcular_tendencia_bruta(
-    videos: list[VideoColetado], pesos_canais: dict[str, float]
+    videos: list[VideoColetado],
+    pesos_canais: dict[str, float],
+    pesos_similaridade: dict[str, float],
 ) -> float:
     total = 0.0
 
     for video in videos:
-        peso_canal = pesos_canais.get(video.canal.casefold(), 1.0)
+        chave_canal = video.canal.casefold()
+        peso_canal = pesos_canais.get(chave_canal, 1.0)
+        peso_similaridade = pesos_similaridade.get(chave_canal, 1.0)
         peso_recencia = _calcular_peso_recencia(video.data_publicacao)
-        total += _score_video(video) * peso_canal * peso_recencia
+        total += (
+            _score_video(video) * peso_canal * peso_similaridade * peso_recencia
+        )
 
     return total
 

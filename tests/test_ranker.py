@@ -85,6 +85,67 @@ class TestRanker(unittest.TestCase):
         self.assertEqual(ranking[0].canais_diferentes, 1)
         self.assertGreater(ranking[0].score_descoberta, ranking[1].score_descoberta)
 
+    def test_canal_mais_similar_influencia_mais_no_ranking(self):
+        # Mesmo video (mesmos numeros e data), so muda o canal: o canal mais
+        # parecido com o nicho tem peso_similaridade maior e deve puxar o jogo
+        # para cima no ranking.
+        canais = [
+            CanalReferencia(
+                nome="Canal Similar",
+                plataforma="youtube",
+                url="https://youtube.com/@similar",
+                peso=1.0,
+                nicho="gaming_humor",
+                tipo_conteudo="gameplay",
+                peso_similaridade=2.0,
+            ),
+            CanalReferencia(
+                nome="Canal Distante",
+                plataforma="youtube",
+                url="https://youtube.com/@distante",
+                peso=1.0,
+                nicho="review_games",
+                tipo_conteudo="review",
+                peso_similaridade=1.0,
+            ),
+        ]
+        jogos = [
+            JogoSeed(nome="Repo", aliases=["repo"], genero="horror", fit_inicial=8),
+            JogoSeed(nome="Mine", aliases=["mine"], genero="sandbox", fit_inicial=8),
+        ]
+        videos = [
+            VideoColetado(
+                titulo="repo gameplay",
+                canal="Canal Similar",
+                plataforma="youtube",
+                url="https://exemplo.com/repo",
+                views=300000,
+                likes=20000,
+                comentarios=800,
+                data_publicacao="2026-05-20",
+                texto_comentarios="repo muito bom",
+            ),
+            VideoColetado(
+                titulo="mine gameplay",
+                canal="Canal Distante",
+                plataforma="youtube",
+                url="https://exemplo.com/mine",
+                views=300000,
+                likes=20000,
+                comentarios=800,
+                data_publicacao="2026-05-20",
+                texto_comentarios="mine muito bom",
+            ),
+        ]
+
+        ranking = calcular_ranking(jogos, videos, canais)
+        por_jogo = {resultado.jogo.nome: resultado for resultado in ranking}
+
+        self.assertEqual(ranking[0].jogo.nome, "Repo")
+        self.assertGreater(
+            por_jogo["Repo"].score_tendencia, por_jogo["Mine"].score_tendencia
+        )
+
     def test_detecta_novas_frases_de_descoberta(self):
         jogo = JogoSeed(
             nome="R.E.P.O.",
