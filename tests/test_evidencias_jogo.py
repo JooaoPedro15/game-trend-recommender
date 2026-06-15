@@ -8,12 +8,13 @@ sys.path.insert(0, str(ROOT / "src"))
 from evidencias_jogo import (
     EvidenciaVideo,
     calcular_score_evidencia_criadores,
+    calcular_score_evidencia_nicho,
     resumir_evidencia_criadores,
 )
 
 
-# Cria uma EvidenciaVideo de teste com score/canal/tipo controlados.
-def _ev(score, canal="Canal A", tipo="curto"):
+# Cria uma EvidenciaVideo de teste com score/canal/tipo/similaridade controlados.
+def _ev(score, canal="Canal A", tipo="curto", sim=1.0):
     return EvidenciaVideo(
         canal=canal,
         plataforma="youtube",
@@ -27,6 +28,7 @@ def _ev(score, canal="Canal A", tipo="curto"):
         views_por_dia=10.0,
         score_viralidade_video=score,
         data_publicacao="2026-05-01",
+        peso_similaridade=sim,
     )
 
 
@@ -76,6 +78,44 @@ def test_score_videos_fracos_fica_baixo_mesmo_com_varios_canais():
 
 def test_score_lista_vazia_e_zero():
     assert calcular_score_evidencia_criadores([]) == 0.0
+
+
+def test_nicho_zero_sem_canais_similares():
+    # Todos os canais em 1.0 (neutro): nenhum conta como "parecido comigo".
+    evidencias = [
+        _ev(90, canal="Canal A", tipo="curto", sim=1.0),
+        _ev(80, canal="Canal B", tipo="longo", sim=1.0),
+    ]
+
+    assert calcular_score_evidencia_nicho(evidencias) == 0.0
+
+
+def test_nicho_considera_apenas_canais_similares():
+    # Mesma viralidade no geral, mas so o Canal A e do meu nicho (sim > 1.0).
+    # O nicho ignora o Canal B distante e fica abaixo do geral.
+    evidencias = [
+        _ev(90, canal="Canal A", tipo="curto", sim=1.5),
+        _ev(90, canal="Canal B", tipo="longo", sim=1.0),
+    ]
+
+    geral = calcular_score_evidencia_criadores(evidencias)
+    nicho = calcular_score_evidencia_nicho(evidencias)
+
+    assert 0.0 < nicho < geral
+
+
+def test_nicho_sobe_com_mais_canais_similares():
+    poucos = [_ev(80, canal="Canal A", tipo="curto", sim=1.4)]
+    varios = [
+        _ev(80, canal="Canal A", tipo="curto", sim=1.4),
+        _ev(70, canal="Canal B", tipo="longo", sim=1.3),
+    ]
+
+    assert calcular_score_evidencia_nicho(poucos) < calcular_score_evidencia_nicho(varios)
+
+
+def test_nicho_lista_vazia_e_zero():
+    assert calcular_score_evidencia_nicho([]) == 0.0
 
 
 def test_resumo_descreve_criadores_e_formatos():

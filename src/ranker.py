@@ -4,7 +4,11 @@ from datetime import date
 from metricas_video import calcular_taxa_engajamento, calcular_views_por_dia
 
 from detector_jogo import detectar_jogos_no_video
-from evidencias_jogo import calcular_score_evidencia_criadores, evidencia_de_video
+from evidencias_jogo import (
+    calcular_score_evidencia_criadores,
+    calcular_score_evidencia_nicho,
+    evidencia_de_video,
+)
 from modelos import (
     CanalReferencia,
     JogoSeed,
@@ -41,6 +45,7 @@ def calcular_ranking(
     if not agregados:
         return []
 
+    mapa_canais = {canal.nome.casefold(): canal for canal in canais}
     pesos_canais = {canal.nome.casefold(): canal.peso for canal in canais}
     pesos_similaridade = {
         canal.nome.casefold(): canal.peso_similaridade for canal in canais
@@ -72,9 +77,12 @@ def calcular_ranking(
         score_oportunidade = _calcular_score_oportunidade(
             score_tendencia, score_saturacao, score_descoberta
         )
-        score_evidencia = calcular_score_evidencia_criadores(
-            [evidencia_de_video(video) for video in videos_jogo]
-        )
+        evidencias_videos = [
+            evidencia_de_video(video, mapa_canais.get(video.canal.casefold()))
+            for video in videos_jogo
+        ]
+        score_evidencia = calcular_score_evidencia_criadores(evidencias_videos)
+        score_nicho = calcular_score_evidencia_nicho(evidencias_videos)
 
         resultados.append(
             ResultadoRecomendacao(
@@ -105,6 +113,7 @@ def calcular_ranking(
                     len(videos_jogo),
                 ),
                 score_evidencia_criadores=round(score_evidencia, 1),
+                score_evidencia_nicho=round(score_nicho, 1),
             )
         )
 

@@ -225,6 +225,7 @@ def imprimir_ranking(ranking) -> None:
         print(f"Saturacao: {resultado.score_saturacao:.1f}")
         print(f"Oportunidade: {resultado.score_oportunidade:.1f}")
         print(f"Evidencia criadores: {resultado.score_evidencia_criadores:.1f}")
+        print(f"Evidencia no meu nicho: {resultado.score_evidencia_nicho:.1f}")
         print(f"Videos encontrados: {resultado.videos_encontrados}")
         print(f"Canais diferentes: {resultado.canais_diferentes}")
         print(f"Motivo: {resultado.motivo}")

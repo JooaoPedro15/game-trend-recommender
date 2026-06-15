@@ -116,6 +116,38 @@ def calcular_score_evidencia_criadores(evidencias: list[EvidenciaVideo]) -> floa
     return round(min(max(score, 0.0), 100.0), 1)
 
 
+# Canais com peso_similaridade acima deste valor contam como "parecidos com o meu nicho".
+# Canais em 1.0 (neutro/sem metadata) ou abaixo nao entram na evidencia de nicho.
+LIMIAR_CANAL_SIMILAR = 1.0
+
+
+# Pontua de 0 a 100 a forca da evidencia DENTRO do meu nicho: usa apenas os videos de
+# canais parecidos comigo (peso_similaridade > LIMIAR_CANAL_SIMILAR). A media de viralidade
+# e ponderada pela similaridade (canal mais parecido pesa mais), com os mesmos bonus de
+# canais diferentes, varios virais e diversidade de formato do score geral. Sem nenhum
+# canal similar, a evidencia de nicho e 0 (jogo viralizou fora do meu estilo).
+def calcular_score_evidencia_nicho(evidencias: list[EvidenciaVideo]) -> float:
+    similares = [e for e in evidencias if e.peso_similaridade > LIMIAR_CANAL_SIMILAR]
+    if not similares:
+        return 0.0
+
+    soma_pesos = sum(e.peso_similaridade for e in similares)
+    media = (
+        sum(e.score_viralidade_video * e.peso_similaridade for e in similares)
+        / soma_pesos
+    )
+    n_canais = len({e.canal.strip().casefold() for e in similares})
+    bons = [e for e in similares if e.score_viralidade_video >= LIMIAR_VIDEO_BOM]
+
+    bonus_canais = min((n_canais - 1) * BONUS_POR_CANAL_EXTRA, TETO_BONUS_CANAIS)
+    bonus_virais = min(max(len(bons) - 1, 0) * BONUS_POR_VIRAL_EXTRA, TETO_BONUS_VIRAIS)
+    bonus_curto = BONUS_FORMATO if any(e.tipo_video == "curto" for e in bons) else 0.0
+    bonus_longo = BONUS_FORMATO if any(e.tipo_video == "longo" for e in bons) else 0.0
+
+    score = media + bonus_canais + bonus_virais + bonus_curto + bonus_longo
+    return round(min(max(score, 0.0), 100.0), 1)
+
+
 # Texto curto explicando a evidencia (nao gera roteiro, gancho ou tom de voz).
 def resumir_evidencia_criadores(evidencias: list[EvidenciaVideo]) -> str:
     if not evidencias:

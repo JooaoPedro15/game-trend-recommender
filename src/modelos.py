@@ -50,3 +50,4 @@ class ResultadoRecomendacao:
     score_oportunidade: float = 0.0
     acao_recomendada: str = ""
     score_evidencia_criadores: float = 0.0
+    score_evidencia_nicho: float = 0.0
