@@ -56,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     channel_id = getattr(args, "channel_id", None)
     limite = getattr(args, "limite", 5)
     jogo = getattr(args, "jogo", None)
+    tipo = getattr(args, "tipo", None)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -126,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if comando == "evidencias_jogo":
-        evidencias_jogo_interativo(jogo)
+        evidencias_jogo_interativo(jogo, tipo)
         return 0
 
     if comando == "exportar_evidencias_jogos":
@@ -476,7 +477,8 @@ def ranking_watchlist_interativo(
 
 
 # Mostra os criadores/videos detectados para um jogo especifico, por viralidade.
-def evidencias_jogo_interativo(nome_jogo: str) -> None:
+# Com tipo (curto/longo/live/desconhecido) filtra apenas os videos daquele formato.
+def evidencias_jogo_interativo(nome_jogo: str, tipo: str | None = None) -> None:
     ranking = _carregar_ranking()
     canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
     evidencias_por_jogo = gerar_evidencias(ranking, canais)
@@ -490,6 +492,12 @@ def evidencias_jogo_interativo(nome_jogo: str) -> None:
         return
 
     evidencias = evidencias_por_jogo[encontrado]
+    if tipo:
+        evidencias = [e for e in evidencias if e.tipo_video == tipo]
+        if not evidencias:
+            print(f"Nenhum video do tipo '{tipo}' encontrado para o jogo: {encontrado}")
+            return
+
     print(f"Jogo: {encontrado}")
     print(f"Score de evidencia: {calcular_score_evidencia_criadores(evidencias):.1f}")
     print(f"Resumo: {resumir_evidencia_criadores(evidencias)}")
@@ -711,6 +719,11 @@ def _construir_parser() -> argparse.ArgumentParser:
         help="Lista os criadores/videos detectados para um jogo especifico.",
     )
     evidencias.add_argument("jogo", help="Nome do jogo (igual ao do jogos_seed.csv).")
+    evidencias.add_argument(
+        "--tipo",
+        choices=["curto", "longo", "live", "desconhecido"],
+        help="Mostra apenas os videos deste formato (curto, longo, live ou desconhecido).",
+    )
 
     exportar_evidencias = subcomandos.add_parser(
         "exportar_evidencias_jogos",
