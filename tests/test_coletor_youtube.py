@@ -13,6 +13,8 @@ import coletor_youtube
 from coletor_youtube import (
     _item_para_video,
     coletar_canal,
+    coletar_detalhe_video,
+    coletar_detalhes_do_canal,
     coletar_video_por_id,
     coletar_videos_por_ids,
     listar_ids_recentes_do_canal,
@@ -279,3 +281,132 @@ def test_coletar_canal_converte_e_salva(monkeypatch, tmp_path):
     salvos = ler_videos_coletados(destino)
     assert [video.titulo for video in salvos] == ["jogo VID0", "jogo VID1"]
     assert all(video.plataforma == "youtube" for video in salvos)
+
+
+# Fake de videos.list com snippet/statistics/contentDetails; duracao varia pelo id.
+def _fake_get_json_detalhe(url):
+    if "/videos" in url:
+        vid = parse_qs(urlparse(url).query)["id"][0]
+        duracoes = {"CURTO": "PT45S", "LONGO": "PT5M30S", "ZERO": "P0D"}
+        return {
+            "items": [
+                {
+                    "snippet": {
+                        "title": f"titulo {vid}",
+                        "channelTitle": "Meu Canal",
+                        "description": f"descricao {vid}",
+                        "tags": ["jogo", "gameplay"],
+                        "publishedAt": "2026-05-01T00:00:00Z",
+                        "liveBroadcastContent": "none",
+                    },
+                    "statistics": {"viewCount": "1000", "likeCount": "100", "commentCount": "10"},
+                    "contentDetails": {"duration": duracoes.get(vid, "PT2M")},
+                }
+            ]
+        }
+    return {"items": []}
+
+
+def test_coletar_detalhe_video_traz_descricao_tags_e_duracao(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json_detalhe)
+
+    detalhe = coletar_detalhe_video("CURTO")
+
+    assert detalhe.video_id == "CURTO"
+    assert detalhe.descricao == "descricao CURTO"
+    assert detalhe.tags == ["jogo", "gameplay"]
+    assert detalhe.duracao_segundos == 45
+    assert detalhe.tipo_video == "curto"
+    assert detalhe.url == "https://www.youtube.com/watch?v=CURTO"
+    assert (detalhe.views, detalhe.likes, detalhe.comentarios) == (1000, 100, 10)
+
+
+def test_tipo_video_longo_acima_de_60s(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json_detalhe)
+
+    detalhe = coletar_detalhe_video("LONGO")
+
+    assert detalhe.duracao_segundos == 330
+    assert detalhe.tipo_video == "longo"
+
+
+def test_tipo_video_desconhecido_sem_duracao(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json_detalhe)
+
+    detalhe = coletar_detalhe_video("ZERO")
+
+    assert detalhe.duracao_segundos == 0
+    assert detalhe.tipo_video == "desconhecido"
+
+
+def test_tipo_video_live_por_sinal(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+
+    def _fake_live(url):
+        return {
+            "items": [
+                {
+                    "snippet": {
+                        "title": "live",
+                        "channelTitle": "Meu Canal",
+                        "publishedAt": "2026-05-01T00:00:00Z",
+                        "liveBroadcastContent": "live",
+                    },
+                    "statistics": {},
+                    "contentDetails": {"duration": "PT0S"},
+                }
+            ]
+        }
+
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_live)
+
+    assert coletar_detalhe_video("L").tipo_video == "live"
+
+
+def test_coletar_detalhe_video_nao_encontrado_retorna_none(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", lambda url: {"items": []})
+
+    assert coletar_detalhe_video("XYZ") is None
+
+
+# Fake completo: channels -> uploads, playlistItems -> ids, videos -> detalhe curto.
+def _fake_get_json_canal_detalhe(url):
+    if "/channels" in url:
+        return {"items": [{"contentDetails": {"relatedPlaylists": {"uploads": "UU_X"}}}]}
+    if "/playlistItems" in url:
+        n = int(parse_qs(urlparse(url).query)["maxResults"][0])
+        return {"items": [{"contentDetails": {"videoId": f"VID{i}"}} for i in range(n)]}
+    if "/videos" in url:
+        vid = parse_qs(urlparse(url).query)["id"][0]
+        return {
+            "items": [
+                {
+                    "snippet": {
+                        "title": f"titulo {vid}",
+                        "channelTitle": "Meu Canal",
+                        "description": "desc",
+                        "tags": ["g"],
+                        "publishedAt": "2026-05-01T00:00:00Z",
+                        "liveBroadcastContent": "none",
+                    },
+                    "statistics": {"viewCount": "5", "likeCount": "1", "commentCount": "0"},
+                    "contentDetails": {"duration": "PT30S"},
+                }
+            ]
+        }
+    return {"items": []}
+
+
+def test_coletar_detalhes_do_canal(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json_canal_detalhe)
+
+    detalhes = coletar_detalhes_do_canal("UC_X", 2)
+
+    assert [d.video_id for d in detalhes] == ["VID0", "VID1"]
+    assert all(d.tipo_video == "curto" for d in detalhes)
+    assert detalhes[0].tags == ["g"]

@@ -6,6 +6,7 @@
 # A chave vem da variavel de ambiente YOUTUBE_API_KEY (nunca escrita no codigo).
 
 import json
+import re
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -14,7 +15,7 @@ from urllib.request import urlopen
 from cache_youtube import CACHE_PATH as CACHE_PADRAO, buscar_no_cache, salvar_no_cache
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv
 from config import ler_chave_youtube
-from modelos import VideoColetado
+from modelos import DetalheVideoYoutube, VideoColetado
 
 
 API_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
@@ -84,6 +85,65 @@ def _item_para_video(item: dict, video_id: str) -> VideoColetado:
         data_publicacao=snippet.get("publishedAt", "")[:10],
         texto_comentarios="",
         origem="youtube",
+    )
+
+
+_DURACAO_RE = re.compile(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?")
+
+
+# Converte a duracao ISO 8601 do YouTube (ex: "PT1M30S") em segundos. Formatos sem
+# tempo parseavel (ex: "P0D" de uma live em andamento) viram 0.
+def _duracao_iso_para_segundos(duracao: str) -> int:
+    correspondencia = _DURACAO_RE.fullmatch(duracao or "")
+    if not correspondencia:
+        return 0
+    horas, minutos, segundos = (int(g) if g else 0 for g in correspondencia.groups())
+    return horas * 3600 + minutos * 60 + segundos
+
+
+# Infere o formato do video: live (se houver sinal), curto (<=60s), longo (>60s) ou
+# desconhecido (sem duracao parseavel e sem sinal de live).
+def _inferir_tipo_video(duracao_segundos: int, item: dict) -> str:
+    estado_live = item.get("snippet", {}).get("liveBroadcastContent", "none")
+    if estado_live in ("live", "upcoming") or "liveStreamingDetails" in item:
+        return "live"
+    if duracao_segundos <= 0:
+        return "desconhecido"
+    if duracao_segundos <= 60:
+        return "curto"
+    return "longo"
+
+
+# Busca os detalhes ricos de um video por id (snippet + statistics + contentDetails) e
+# devolve um DetalheVideoYoutube com descricao, tags, duracao e tipo_video inferido.
+# Reutiliza _item_para_video para os campos em comum com VideoColetado. None se nao existir.
+def coletar_detalhe_video(video_id: str) -> DetalheVideoYoutube | None:
+    chave = _exigir_chave()
+    parametros = urlencode(
+        {"part": "snippet,statistics,contentDetails", "id": video_id, "key": chave}
+    )
+    itens = _get_json(f"{API_VIDEOS_URL}?{parametros}").get("items", [])
+    if not itens:
+        return None
+
+    item = itens[0]
+    base = _item_para_video(item, video_id)
+    snippet = item.get("snippet", {})
+    duracao_segundos = _duracao_iso_para_segundos(
+        item.get("contentDetails", {}).get("duration", "")
+    )
+    return DetalheVideoYoutube(
+        video_id=video_id,
+        titulo=base.titulo,
+        descricao=snippet.get("description", ""),
+        tags=snippet.get("tags", []),
+        url=base.url,
+        views=base.views,
+        likes=base.likes,
+        comentarios=base.comentarios,
+        data_publicacao=base.data_publicacao,
+        duracao_segundos=duracao_segundos,
+        tipo_video=_inferir_tipo_video(duracao_segundos, item),
     )
 
 
@@ -199,3 +259,14 @@ def coletar_canal(
 ) -> dict[str, int]:
     ids = listar_ids_recentes_do_canal(channel_id, limite)
     return _coletar_e_salvar(ids, caminho_destino, caminho_cache)
+
+
+# Para cada video recente do canal, busca os detalhes ricos e devolve a lista de
+# DetalheVideoYoutube. Nao salva em CSV — so coleta para analise. Padrao 10 (pouca quota).
+def coletar_detalhes_do_canal(channel_id: str, limite: int = 10) -> list[DetalheVideoYoutube]:
+    detalhes = []
+    for video_id in listar_ids_recentes_do_canal(channel_id, limite):
+        detalhe = coletar_detalhe_video(video_id)
+        if detalhe is not None:
+            detalhes.append(detalhe)
+    return detalhes

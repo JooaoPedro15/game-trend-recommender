@@ -35,6 +35,24 @@ class VideoColetado:
     tipo_video: str = "desconhecido"
 
 
+# Detalhes ricos de um video do YouTube (snippet + statistics + contentDetails).
+# Estrutura propria porque guarda campos que o VideoColetado nao tem: descricao,
+# tags e duracao. Usada na coleta dos meus videos para analise de performance.
+@dataclass
+class DetalheVideoYoutube:
+    video_id: str
+    titulo: str
+    descricao: str
+    tags: list[str]
+    url: str
+    views: int
+    likes: int
+    comentarios: int
+    data_publicacao: str
+    duracao_segundos: int
+    tipo_video: str
+
+
 @dataclass
 class ResultadoRecomendacao:
     jogo: JogoSeed
