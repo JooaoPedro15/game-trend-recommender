@@ -1,6 +1,8 @@
+import io
 import json
 import sys
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -13,6 +15,7 @@ import coletor_youtube
 from coletor_youtube import (
     _item_para_video,
     coletar_canal,
+    coletar_comentarios,
     coletar_detalhe_video,
     coletar_detalhes_do_canal,
     coletar_video_por_id,
@@ -410,3 +413,73 @@ def test_coletar_detalhes_do_canal(monkeypatch):
     assert [d.video_id for d in detalhes] == ["VID0", "VID1"]
     assert all(d.tipo_video == "curto" for d in detalhes)
     assert detalhes[0].tags == ["g"]
+
+
+# Resposta fake de commentThreads (context manager com read() devolvendo JSON).
+class _RespostaComentariosFake:
+    def __init__(self, textos):
+        self._textos = textos
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self):
+        return json.dumps(
+            {
+                "items": [
+                    {"snippet": {"topLevelComment": {"snippet": {"textDisplay": t}}}}
+                    for t in self._textos
+                ]
+            }
+        )
+
+
+def _erro_403(reason):
+    corpo = json.dumps({"error": {"errors": [{"reason": reason}]}}).encode("utf-8")
+    return HTTPError("url", 403, "Forbidden", {}, io.BytesIO(corpo))
+
+
+def test_coletar_comentarios_devolve_so_o_texto(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    textos = ["qual o nome do jogo?", "e o Schedule I", "muito bom"]
+    monkeypatch.setattr(
+        coletor_youtube, "urlopen", lambda url, timeout=10: _RespostaComentariosFake(textos)
+    )
+
+    assert coletar_comentarios("ABC", 50) == textos
+
+
+def test_coletar_comentarios_respeita_limite(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    textos = [f"comentario {i}" for i in range(10)]
+    monkeypatch.setattr(
+        coletor_youtube, "urlopen", lambda url, timeout=10: _RespostaComentariosFake(textos)
+    )
+
+    assert coletar_comentarios("ABC", 3) == ["comentario 0", "comentario 1", "comentario 2"]
+
+
+def test_coletar_comentarios_desativados_retorna_vazio(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+
+    def _raise(url, timeout=10):
+        raise _erro_403("commentsDisabled")
+
+    monkeypatch.setattr(coletor_youtube, "urlopen", _raise)
+
+    assert coletar_comentarios("ABC", 50) == []
+
+
+def test_coletar_comentarios_outro_403_levanta_erro(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+
+    def _raise(url, timeout=10):
+        raise _erro_403("quotaExceeded")
+
+    monkeypatch.setattr(coletor_youtube, "urlopen", _raise)
+
+    with pytest.raises(RuntimeError):
+        coletar_comentarios("ABC", 50)

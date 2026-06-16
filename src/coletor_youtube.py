@@ -21,6 +21,7 @@ from modelos import DetalheVideoYoutube, VideoColetado
 API_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 API_CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
 API_PLAYLIST_ITEMS_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
+API_COMMENT_THREADS_URL = "https://www.googleapis.com/youtube/v3/commentThreads"
 
 
 # Devolve a chave do ambiente ou levanta RuntimeError com mensagem clara.
@@ -270,3 +271,55 @@ def coletar_detalhes_do_canal(channel_id: str, limite: int = 10) -> list[Detalhe
         if detalhe is not None:
             detalhes.append(detalhe)
     return detalhes
+
+
+# Detecta o caso "comentarios desativados": a API responde HTTP 403 com reason
+# 'commentsDisabled'. Le o corpo do erro para nao confundir com 403 de quota ou chave.
+def _comentarios_desativados(erro: HTTPError) -> bool:
+    if erro.code != 403:
+        return False
+    try:
+        corpo = json.loads(erro.read().decode("utf-8"))
+    except (ValueError, OSError):
+        return False
+    motivos = {e.get("reason", "") for e in corpo.get("error", {}).get("errors", [])}
+    return "commentsDisabled" in motivos
+
+
+# Coleta ate `limite` comentarios de topo (apenas o texto) de um video, via
+# commentThreads.list. Nao guarda nenhum dado pessoal (autor, canal, foto) — so o texto,
+# que ajuda a detectar o nome do jogo. Sem paginacao: no maximo uma pagina por video.
+# Comentarios desativados -> lista vazia, sem quebrar a coleta dos outros videos.
+def coletar_comentarios(video_id: str, limite: int = 50) -> list[str]:
+    chave = _exigir_chave()
+    parametros = urlencode(
+        {
+            "part": "snippet",
+            "videoId": video_id,
+            "maxResults": min(limite, 100),
+            "textFormat": "plainText",
+            "key": chave,
+        }
+    )
+    url = f"{API_COMMENT_THREADS_URL}?{parametros}"
+    try:
+        with urlopen(url, timeout=10) as resposta:
+            dados = json.load(resposta)
+    except HTTPError as erro:
+        if _comentarios_desativados(erro):
+            return []
+        raise RuntimeError(
+            f"Erro na YouTube Data API (HTTP {erro.code}). Verifique a chave e a quota."
+        ) from erro
+
+    comentarios = []
+    for item in dados.get("items", [])[:limite]:
+        texto = (
+            item.get("snippet", {})
+            .get("topLevelComment", {})
+            .get("snippet", {})
+            .get("textDisplay", "")
+        )
+        if texto:
+            comentarios.append(texto)
+    return comentarios
