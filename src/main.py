@@ -4,7 +4,14 @@ from pathlib import Path
 
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv, importar_videos_csv
 from cadastro_jogo import adicionar_alias_jogo
-from coletor_youtube import CACHE_PADRAO, coletar_canal, coletar_video_por_id, coletar_videos_por_ids
+from coletor_youtube import (
+    CACHE_PADRAO,
+    coletar_canal,
+    coletar_video_por_id,
+    coletar_videos_por_ids,
+    listar_videos_recentes_do_canal,
+)
+from config import ler_id_canal_proprio
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
@@ -96,6 +103,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "coletar_canal_youtube":
         coletar_canal_youtube_interativo(channel_id, limite)
+        return 0
+
+    if comando == "listar_meus_videos_youtube":
+        listar_meus_videos_youtube_interativo(limite)
         return 0
 
     if comando == "salvar_snapshot_ranking":
@@ -332,6 +343,32 @@ def coletar_videos_youtube_interativo(caminho_ids: str) -> None:
     print(f"Videos salvos: {resumo['salvos']}")
     print(f"Duplicados ignorados: {resumo['duplicados']}")
     print(f"Erros: {resumo['erros']}")
+
+
+# Lista os IDs (e titulos) dos meus videos recentes do YouTube, sem salvar no CSV.
+# Usa o canal proprio (MEU_CANAL_YOUTUBE_ID); avisa de forma clara se nao estiver definido.
+def listar_meus_videos_youtube_interativo(limite: int) -> None:
+    channel_id = ler_id_canal_proprio()
+    if channel_id is None:
+        print(
+            "MEU_CANAL_YOUTUBE_ID nao definido no ambiente. "
+            "Defina a variavel antes de listar os seus videos (veja .env.example)."
+        )
+        return
+
+    try:
+        videos = listar_videos_recentes_do_canal(channel_id, limite)
+    except RuntimeError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    print("=== Meus Videos Recentes do YouTube ===")
+    if not videos:
+        print("Nenhum video encontrado para o canal.")
+        return
+
+    for posicao, video in enumerate(videos, start=1):
+        print(f"{posicao}. {video['video_id']} | {video['titulo']}")
 
 
 # Coleta os videos recentes de um canal do YouTube e mostra o resumo.
@@ -677,6 +714,17 @@ def _construir_parser() -> argparse.ArgumentParser:
         type=_top_valido,
         default=5,
         help="Quantos videos recentes coletar (padrao: 5).",
+    )
+
+    meus_videos = subcomandos.add_parser(
+        "listar_meus_videos_youtube",
+        help="Lista os IDs e titulos dos seus videos recentes do YouTube (nao salva no CSV).",
+    )
+    meus_videos.add_argument(
+        "--limite",
+        type=_top_valido,
+        default=10,
+        help="Quantos videos recentes listar (padrao: 10).",
     )
 
     snapshot = subcomandos.add_parser(

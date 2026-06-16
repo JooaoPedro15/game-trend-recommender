@@ -111,6 +111,33 @@ def listar_ids_recentes_do_canal(channel_id: str, limite: int = 5) -> list[str]:
     return [item["contentDetails"]["videoId"] for item in itens]
 
 
+# Lista os videos recentes do canal (uploads playlist) como dicts {video_id, titulo},
+# ate o limite. Padrao 10 para gastar pouca quota (channels.list + playlistItems.list =
+# 2 unidades, sem buscar estatisticas). Lista vazia se o canal nao existir.
+def listar_videos_recentes_do_canal(channel_id: str, limite: int = 10) -> list[dict]:
+    playlist = obter_playlist_uploads(channel_id)
+    if playlist is None:
+        return []
+
+    chave = _exigir_chave()
+    parametros = urlencode(
+        {
+            "part": "snippet,contentDetails",
+            "playlistId": playlist,
+            "maxResults": limite,
+            "key": chave,
+        }
+    )
+    itens = _get_json(f"{API_PLAYLIST_ITEMS_URL}?{parametros}").get("items", [])
+    return [
+        {
+            "video_id": item.get("contentDetails", {}).get("videoId", ""),
+            "titulo": item.get("snippet", {}).get("title", ""),
+        }
+        for item in itens
+    ]
+
+
 # Le os video_ids de um arquivo texto (um por linha), ignorando vazios e repetidos.
 def ler_ids_de_arquivo(caminho: str | Path) -> list[str]:
     caminho = Path(caminho)

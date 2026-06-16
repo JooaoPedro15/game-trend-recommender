@@ -16,6 +16,7 @@ from coletor_youtube import (
     coletar_video_por_id,
     coletar_videos_por_ids,
     listar_ids_recentes_do_canal,
+    listar_videos_recentes_do_canal,
     ler_ids_de_arquivo,
     obter_playlist_uploads,
 )
@@ -226,6 +227,43 @@ def test_listar_ids_canal_sem_videos_retorna_vazio(monkeypatch):
     monkeypatch.setattr(coletor_youtube, "_get_json", _so_uploads)
 
     assert listar_ids_recentes_do_canal("UC_X", 5) == []
+
+
+# Fake que inclui snippet.title nos playlistItems, para testar a versao com titulos.
+def _fake_get_json_com_titulo(url):
+    if "/channels" in url:
+        return {"items": [{"contentDetails": {"relatedPlaylists": {"uploads": "UU_X"}}}]}
+    if "/playlistItems" in url:
+        n = int(parse_qs(urlparse(url).query)["maxResults"][0])
+        return {
+            "items": [
+                {
+                    "contentDetails": {"videoId": f"VID{i}"},
+                    "snippet": {"title": f"meu video {i}"},
+                }
+                for i in range(n)
+            ]
+        }
+    return {"items": []}
+
+
+def test_listar_videos_recentes_traz_id_e_titulo(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json_com_titulo)
+
+    videos = listar_videos_recentes_do_canal("UC_X", 2)
+
+    assert videos == [
+        {"video_id": "VID0", "titulo": "meu video 0"},
+        {"video_id": "VID1", "titulo": "meu video 1"},
+    ]
+
+
+def test_listar_videos_recentes_canal_inexistente_retorna_vazio(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", lambda url: {"items": []})
+
+    assert listar_videos_recentes_do_canal("UC_X", 10) == []
 
 
 def test_coletar_canal_converte_e_salva(monkeypatch, tmp_path):
