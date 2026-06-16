@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from detector_jogo import detectar_jogos_no_video
+from detector_jogo import detectar_jogo_em_conteudo, detectar_jogos_no_video
 from modelos import JogoSeed, VideoColetado
 
 
@@ -80,6 +80,74 @@ def test_detecta_jogo_pelo_texto_dos_comentarios():
     resultado = detectar_jogos_no_video(video, [jogo])
 
     assert resultado == [jogo]
+
+
+def _jogos_exemplo():
+    return [
+        JogoSeed(nome="Schedule I", aliases=["schedule 1", "schedule one"], genero="sim", fit_inicial=9.0),
+        JogoSeed(nome="R.E.P.O.", aliases=["repo", "repo game"], genero="horror", fit_inicial=9.0),
+    ]
+
+
+def test_em_conteudo_descricao_explicita_tem_confianca_alta():
+    deteccao = detectar_jogo_em_conteudo(
+        _jogos_exemplo(),
+        titulo="gameplay aleatorio",
+        descricao="Inscreva-se!\nJogo: Schedule I\nObrigado",
+    )
+
+    assert deteccao.jogo.nome == "Schedule I"
+    assert deteccao.confianca == "alta"
+    assert deteccao.fonte == "descricao"
+
+
+def test_em_conteudo_detecta_por_tag():
+    deteccao = detectar_jogo_em_conteudo(
+        _jogos_exemplo(),
+        titulo="sem nome aqui",
+        tags=["gameplay", "repo game", "terror"],
+    )
+
+    assert deteccao.jogo.nome == "R.E.P.O."
+    assert deteccao.confianca == "media"
+    assert deteccao.fonte == "tags"
+
+
+def test_em_conteudo_detecta_pelo_titulo():
+    deteccao = detectar_jogo_em_conteudo(
+        _jogos_exemplo(),
+        titulo="SCHEDULE 1 me viciou",
+    )
+
+    assert deteccao.jogo.nome == "Schedule I"
+    assert deteccao.confianca == "media"
+    assert deteccao.fonte == "titulo"
+
+
+def test_em_conteudo_detecta_por_comentario_com_confianca_baixa():
+    deteccao = detectar_jogo_em_conteudo(
+        _jogos_exemplo(),
+        titulo="que jogo e esse??",
+        comentarios=["nao sei", "acho que e repo", "muito bom"],
+    )
+
+    assert deteccao.jogo.nome == "R.E.P.O."
+    assert deteccao.confianca == "baixa"
+    assert deteccao.fonte == "comentarios"
+
+
+def test_em_conteudo_nenhum_jogo_detectado():
+    deteccao = detectar_jogo_em_conteudo(
+        _jogos_exemplo(),
+        titulo="dia comum",
+        descricao="sem nada relevante",
+        tags=["vlog"],
+        comentarios=["legal"],
+    )
+
+    assert deteccao.jogo is None
+    assert deteccao.confianca == "nao_detectado"
+    assert deteccao.fonte == "nao_detectado"
 
 
 if __name__ == "__main__":
