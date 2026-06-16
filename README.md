@@ -27,6 +27,10 @@ It is an early MVP and a future building block of a larger "Creator Intelligence
 - Alias management to grow game detection from real data.
 - Monitoring tools: ranking history snapshots, snapshot comparison (rose/fell/new/gone),
   an opportunity shortlist and a personal watchlist — see [`docs/monitoring.md`](docs/monitoring.md).
+- **Creator evidence & niche analysis:** per-game list of the creators/videos behind a
+  game, a general creator-evidence score and a niche-specific one (weighting creators
+  similar to your channel), with a `--tipo` filter by video format — see
+  [`docs/creator_evidence.md`](docs/creator_evidence.md).
 - **Optional:** collect videos from YouTube (Data API v3) — by video id, in batch from an
   id file, or a channel's recent uploads — with a local cache to save API quota.
 
@@ -57,12 +61,16 @@ game-trend-recommender/
 |   |-- diagnostico_dados.py   # data-quality diagnostics + orphan videos
 |   |-- coletor_youtube.py     # YouTube Data API v3 collector (optional)
 |   |-- config.py              # reads YOUTUBE_API_KEY from the environment
-|   |-- metricas_video.py      # engagement metric (single source of truth)
+|   |-- metricas_video.py      # engagement / velocity / per-video virality metrics
+|   |-- evidencias_jogo.py     # creator-evidence + niche-evidence scores
 |   |-- relatorio.py           # Markdown / CSV report generation
 |   `-- modelos.py             # dataclasses (VideoColetado, JogoSeed, ...)
 |-- tests/                     # pytest suite
 |-- reports/                   # generated reports (Markdown / CSV)
 |-- docs/
+|   |-- creator_evidence.md
+|   |-- ranking_logic.md
+|   |-- monitoring.md
 |   |-- fluxo_dados.md
 |   `-- publicacao_github.md
 |-- README.md
@@ -102,12 +110,14 @@ ranking ordered by final score.
 | `listar_watchlist` | List the games on the watchlist. |
 | `remover_watchlist "<jogo>"` | Remove a game from the watchlist. |
 | `ranking_watchlist` | Show how each watchlist game ranks right now. |
+| `evidencias_jogo "<jogo>" [--tipo {curto,longo,live,desconhecido}]` | List the creators/videos that back a game, sorted by virality, with niche and format metadata, plus the creator-evidence and niche-evidence scores. `--tipo` keeps only one video format. |
+| `exportar_evidencias_jogos` | Export a per-game creator-evidence report to a timestamped Markdown file in `reports/`. |
 
 See [`docs/monitoring.md`](docs/monitoring.md) for the history / comparison / watchlist
 workflow and the recommended routine.
 
 Shared options for `ranking`, `exportar_ranking`, `oportunidades`,
-`salvar_snapshot_ranking` and `ranking_watchlist`:
+`salvar_snapshot_ranking`, `ranking_watchlist` and `exportar_evidencias_jogos`:
 
 | Option | Description |
 |--------|-------------|
@@ -202,9 +212,16 @@ Rules:
 
 All inputs live in `data/` as CSV.
 
-**`canais_referencia.csv`** — `nome,plataforma,url,peso`
-`peso` weights channels that tend to anticipate trends or match the channel's audience.
-Use `1.0` as the default.
+**`canais_referencia.csv`** — `nome,plataforma,url,peso,nicho,tipo_conteudo,peso_similaridade`
+- `peso` — channel authority as a trend signal (default `1.0`).
+- `nicho` — channel niche label (`gaming_humor`, `shorts_games`, `review_games`, ...; default `desconhecido`).
+- `tipo_conteudo` — the channel's dominant format (`gameplay`, `shorts`, `live`, `review`, `cortes`, `misto`; default `desconhecido`).
+- `peso_similaridade` — how similar the channel is to your niche; videos from more similar
+  creators weigh more in the trend score (default `1.0`).
+
+Older files with only `nome,plataforma,url,peso` still work — the new columns fall back to
+their defaults. See [`docs/creator_evidence.md`](docs/creator_evidence.md) for how the niche
+and creator-evidence scores are computed.
 
 **`jogos_seed.csv`** — `nome,aliases,genero,fit_inicial`
 Separate aliases with `|` (e.g. `R.E.P.O.,repo|r.e.p.o|repo game,horror engracado,9`).
@@ -214,6 +231,9 @@ Separate aliases with `|` (e.g. `R.E.P.O.,repo|r.e.p.o|repo game,horror engracad
 The detector searches names/aliases in `titulo` and `texto_comentarios`. For better
 results, copy "discovery" signals from the comments, such as: `qual nome`, `que jogo`,
 `what game`, `game name`, `onde baixa`, `tem na steam`, `link do jogo`.
+
+An optional `tipo_video` column (`curto` / `longo` / `live` / `desconhecido`) records each
+video's format and powers the `--tipo` filter of the `evidencias_jogo` command.
 
 ## Ranking logic overview
 
@@ -238,7 +258,11 @@ On top of those, each game also gets:
   the entry window?" (fit is excluded on purpose: the opportunity belongs to the market).
 - a **reason** in plain language, aware of the opportunity signals;
 - a **recommended action** (prioritize a long video, test in a Short, research more,
-  monitor, or avoid due to saturation).
+  monitor, or avoid due to saturation);
+- a **creator-evidence score** and a **niche creator-evidence score** — how validated the
+  game is by creators in general and by creators similar to your channel. These are reading
+  signals only; they do not change the ranking order. See
+  [`docs/creator_evidence.md`](docs/creator_evidence.md).
 
 All weights and thresholds are **MVP heuristics** — chosen deliberately but not yet
 calibrated against real channel results (that tuning is on the roadmap). See
