@@ -5,6 +5,11 @@ from metricas_video import calcular_taxa_engajamento, calcular_views_por_dia
 from evidencias_jogo import gerar_evidencias, resumir_evidencia_criadores
 
 
+# Formata o fit real para os relatorios: "n/d" quando o jogo nunca apareceu no meu canal.
+def _formatar_fit_real(score_fit_real: float | None) -> str:
+    return "n/d" if score_fit_real is None else f"{score_fit_real:.1f}"
+
+
 # Gera um relatorio em Markdown com os resultados do ranking.
 def gerar_relatorio_markdown(caminho: str | Path, ranking) -> None:
     caminho = Path(caminho)
@@ -23,6 +28,7 @@ def gerar_relatorio_markdown(caminho: str | Path, ranking) -> None:
             linhas.append(f"Score final: {resultado.score_final:.1f}")
             linhas.append(f"Tendencia: {resultado.score_tendencia:.1f}")
             linhas.append(f"Fit com o canal: {resultado.score_fit_canal:.1f}")
+            linhas.append(f"Fit real (meu canal): {_formatar_fit_real(resultado.score_fit_real)}")
             linhas.append(f"Descoberta: {resultado.score_descoberta:.1f}")
             linhas.append(f"Saturacao: {resultado.score_saturacao:.1f}")
             linhas.append(f"Oportunidade: {resultado.score_oportunidade:.1f}")
@@ -61,6 +67,7 @@ CAMPOS_CSV = [
     "score_final",
     "score_tendencia",
     "score_fit_canal",
+    "score_fit_real",
     "score_descoberta",
     "score_saturacao",
     "score_oportunidade",
@@ -89,6 +96,9 @@ def gerar_relatorio_csv(caminho: str | Path, ranking) -> None:
                     "score_final": resultado.score_final,
                     "score_tendencia": resultado.score_tendencia,
                     "score_fit_canal": resultado.score_fit_canal,
+                    "score_fit_real": (
+                        "" if resultado.score_fit_real is None else resultado.score_fit_real
+                    ),
                     "score_descoberta": resultado.score_descoberta,
                     "score_saturacao": resultado.score_saturacao,
                     "score_oportunidade": resultado.score_oportunidade,

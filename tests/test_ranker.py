@@ -8,9 +8,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from modelos import CanalReferencia, JogoSeed, VideoColetado
+from modelos import CanalReferencia, JogoSeed, MeuVideo, VideoColetado
 from ranker import (
     calcular_ranking,
+    _ajuste_fit_real,
     _calcular_bonus_velocidade,
     _calcular_score_oportunidade,
     _gerar_acao_recomendada,
@@ -624,6 +625,86 @@ def test_ranking_preenche_acao_recomendada():
     resultado = calcular_ranking([jogo], [video], [])[0]
 
     assert resultado.acao_recomendada == "Priorizar para video longo"
+
+
+# --- Sprint 9.2: fit real do canal ajusta o score final de forma leve ---
+
+# Meu video com data antiga: o score_resultado_real fica deterministico (volume +
+# engajamento), sem depender da data de hoje. forte ~66, fraco ~4.
+def _meu_video_fit(jogo, video_id, views, likes, comentarios):
+    return MeuVideo(
+        video_id=video_id,
+        titulo=f"meu {video_id}",
+        url=f"https://youtu.be/{video_id}",
+        data_publicacao="2020-01-01",
+        jogo_detectado=jogo,
+        confianca_jogo="alta",
+        fonte_deteccao="descricao",
+        views=views,
+        likes=likes,
+        comentarios=comentarios,
+        tipo_video="longo",
+    )
+
+
+def _jogo_e_video_simples():
+    jogo = JogoSeed(nome="Repo", aliases=["repo"], genero="terror", fit_inicial=8.0)
+    video = VideoColetado(
+        titulo="repo viralizou",
+        canal="Canal",
+        plataforma="youtube",
+        url="https://youtube.com/repo",
+        views=100000,
+        likes=9000,
+        comentarios=1500,
+        data_publicacao=date.today().isoformat(),
+        texto_comentarios="",
+    )
+    return jogo, video
+
+
+def test_ajuste_fit_real_e_leve_e_limitado():
+    assert _ajuste_fit_real(None) == 0.0
+    assert _ajuste_fit_real(45.0) == 0.0   # zona morta
+    assert _ajuste_fit_real(60.0) == 0.0   # limiar do bonus
+    assert _ajuste_fit_real(30.0) == 0.0   # limiar da penalidade
+    assert _ajuste_fit_real(100.0) == 5.0
+    assert _ajuste_fit_real(0.0) == -5.0
+    assert abs(_ajuste_fit_real(80.0) - 2.5) < 1e-9
+
+
+def test_fit_real_alto_da_bonus_leve_no_score_final():
+    jogo, video = _jogo_e_video_simples()
+    base = calcular_ranking([jogo], [video], [])[0]
+
+    meus = [_meu_video_fit("Repo", "m1", 900000, 120000, 8000)]  # forte ~66
+    com_fit = calcular_ranking([jogo], [video], [], meus)[0]
+
+    assert com_fit.score_fit_real is not None
+    assert com_fit.score_final > base.score_final
+    assert com_fit.score_final - base.score_final <= 5.0  # ajuste leve
+
+
+def test_fit_real_muito_baixo_da_penalidade_leve():
+    jogo, video = _jogo_e_video_simples()
+    base = calcular_ranking([jogo], [video], [])[0]
+
+    meus = [_meu_video_fit("Repo", "m1", 80000, 200, 50)]  # fraco ~4
+    com_fit = calcular_ranking([jogo], [video], [], meus)[0]
+
+    assert com_fit.score_final < base.score_final
+    assert base.score_final - com_fit.score_final <= 5.0
+
+
+def test_fit_real_sem_historico_mantem_score():
+    jogo, video = _jogo_e_video_simples()
+    base = calcular_ranking([jogo], [video], [])[0]
+
+    meus = [_meu_video_fit("Outro Jogo", "m1", 900000, 120000, 8000)]
+    com_fit = calcular_ranking([jogo], [video], [], meus)[0]
+
+    assert com_fit.score_fit_real is None
+    assert com_fit.score_final == base.score_final
 
 
 if __name__ == "__main__":

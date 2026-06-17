@@ -9,9 +9,11 @@ from evidencias_jogo import (
     calcular_score_evidencia_nicho,
     evidencia_de_video,
 )
+from fit_canal import calcular_fit_real_jogo
 from modelos import (
     CanalReferencia,
     JogoSeed,
+    MeuVideo,
     ResultadoRecomendacao,
     VideoColetado,
 )
@@ -40,7 +42,9 @@ def calcular_ranking(
     jogos: list[JogoSeed],
     videos: list[VideoColetado],
     canais: list[CanalReferencia],
+    meus_videos: list[MeuVideo] | None = None,
 ) -> list[ResultadoRecomendacao]:
+    meus_videos = meus_videos or []
     agregados = _agrupar_videos_por_jogo(jogos, videos)
     if not agregados:
         return []
@@ -68,12 +72,14 @@ def calcular_ranking(
         score_fit_canal = _limitar(jogo.fit_inicial * 10)
         score_descoberta = _calcular_score_descoberta(videos_jogo)
         score_saturacao = _calcular_score_saturacao(canais_diferentes)
-        score_final = (
+        fit_real = calcular_fit_real_jogo(nome_jogo, meus_videos)
+        score_final_base = (
             score_tendencia * 0.40
             + score_fit_canal * 0.35
             + score_descoberta * 0.15
             + score_saturacao * 0.10
         )
+        score_final = _limitar(score_final_base + _ajuste_fit_real(fit_real))
         score_oportunidade = _calcular_score_oportunidade(
             score_tendencia, score_saturacao, score_descoberta
         )
@@ -114,10 +120,33 @@ def calcular_ranking(
                 ),
                 score_evidencia_criadores=round(score_evidencia, 1),
                 score_evidencia_nicho=round(score_nicho, 1),
+                score_fit_real=round(fit_real, 1) if fit_real is not None else None,
             )
         )
 
     return sorted(resultados, key=lambda resultado: resultado.score_final, reverse=True)
+
+
+# Ajuste leve pelo fit real do canal (Sprint 9.2): so empurra a recomendacao alguns
+# pontos quando ja ha historico do jogo no meu canal. Nunca domina o ranking — o teto
+# do ajuste e pequeno (+/- AJUSTE_FIT_REAL_MAX) e ha uma zona morta no meio para nao
+# mexer em jogos de resultado mediano.
+FIT_REAL_ALTO = 60.0
+FIT_REAL_BAIXO = 30.0
+AJUSTE_FIT_REAL_MAX = 5.0
+
+
+# Converte o fit real (0-100, ou None se nunca testado) em um ajuste pequeno no score
+# final: bonus quando alto, penalidade quando muito baixo, zero na zona morta ou sem
+# historico. Continuo nas pontas: 0 no limiar, +/-MAX nos extremos (100 e 0).
+def _ajuste_fit_real(fit_real: float | None) -> float:
+    if fit_real is None:
+        return 0.0
+    if fit_real >= FIT_REAL_ALTO:
+        return ((fit_real - FIT_REAL_ALTO) / (100.0 - FIT_REAL_ALTO)) * AJUSTE_FIT_REAL_MAX
+    if fit_real <= FIT_REAL_BAIXO:
+        return -((FIT_REAL_BAIXO - fit_real) / FIT_REAL_BAIXO) * AJUSTE_FIT_REAL_MAX
+    return 0.0
 
 
 # Filtra o ranking para apenas as oportunidades prioritarias, preservando a posicao

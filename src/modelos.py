@@ -90,3 +90,6 @@ class ResultadoRecomendacao:
     acao_recomendada: str = ""
     score_evidencia_criadores: float = 0.0
     score_evidencia_nicho: float = 0.0
+    # Fit real medido nos meus videos (0-100); None quando o jogo nunca apareceu no
+    # meu canal (sem historico, sem ajuste). Veja src/fit_canal.py e o ranker.
+    score_fit_real: float | None = None

@@ -178,16 +178,19 @@ def main(argv: list[str] | None = None) -> int:
 
 
 # Le os CSVs de dados e delega para _montar_ranking (separa I/O de disco da logica pura).
+# Inclui os meus videos (se houver) para o ranking considerar o fit real do canal.
 def _carregar_ranking(
     plataforma: str | None = None, top: int | None = None, desde: date | None = None
 ):
     canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     videos = ler_videos_coletados(VIDEOS_CSV)
-    return _montar_ranking(jogos, videos, canais, plataforma, top, desde)
+    meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
+    return _montar_ranking(jogos, videos, canais, plataforma, top, desde, meus_videos)
 
 
 # Aplica os filtros de plataforma e data e o limite Top N (se houver) e retorna o ranking.
+# Os filtros incidem so nos videos de referencia; o fit real usa todo o meu historico.
 def _montar_ranking(
     jogos,
     videos,
@@ -195,12 +198,13 @@ def _montar_ranking(
     plataforma: str | None = None,
     top: int | None = None,
     desde: date | None = None,
+    meus_videos=None,
 ):
     if plataforma:
         videos = _filtrar_por_plataforma(videos, plataforma)
     if desde is not None:
         videos = _filtrar_por_data(videos, desde)
-    ranking = calcular_ranking(jogos, videos, canais)
+    ranking = calcular_ranking(jogos, videos, canais, meus_videos)
     if top is not None:
         ranking = ranking[:top]
     return ranking
@@ -249,6 +253,11 @@ def exportar_evidencias_jogos(
     print(f"Relatorio gerado em: {caminho_relatorio}")
 
 
+# Formata o fit real para exibicao: "n/d" quando o jogo nunca apareceu no meu canal.
+def _formatar_fit_real(score_fit_real: float | None) -> str:
+    return "n/d" if score_fit_real is None else f"{score_fit_real:.1f}"
+
+
 def imprimir_ranking(ranking) -> None:
     print("=== Ranking de Games Recomendados ===")
     print()
@@ -262,6 +271,7 @@ def imprimir_ranking(ranking) -> None:
         print(f"Score final: {resultado.score_final:.1f}")
         print(f"Tendencia: {resultado.score_tendencia:.1f}")
         print(f"Fit com o canal: {resultado.score_fit_canal:.1f}")
+        print(f"Fit real (meu canal): {_formatar_fit_real(resultado.score_fit_real)}")
         print(f"Descoberta: {resultado.score_descoberta:.1f}")
         print(f"Saturacao: {resultado.score_saturacao:.1f}")
         print(f"Oportunidade: {resultado.score_oportunidade:.1f}")
