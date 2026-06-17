@@ -23,6 +23,7 @@ from meus_videos import (
     listar_meus_videos_sem_jogo,
 )
 from relatorio_meu_canal import gerar_relatorio_meu_canal_markdown
+from repetir_jogos import imprimir_jogos_para_repetir, jogos_para_repetir
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
@@ -136,6 +137,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "relatorio_meu_canal":
         relatorio_meu_canal_interativo()
+        return 0
+
+    if comando == "jogos_para_repetir":
+        jogos_para_repetir_interativo(plataforma, top, desde)
         return 0
 
     if comando == "salvar_snapshot_ranking":
@@ -462,6 +467,16 @@ def comparar_recomendacoes_meu_canal_interativo(
     meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
     comparacoes = comparar_recomendacoes_com_meu_canal(ranking, meus_videos)
     imprimir_comparacao_meu_canal(comparacoes)
+
+
+# Cruza o ranking atual com os meus videos e lista os jogos que ja funcionaram comigo e
+# ainda tem janela aberta (candidatos a repeticao). Nao altera o ranking.
+def jogos_para_repetir_interativo(
+    plataforma: str | None = None, top: int | None = None, desde: date | None = None
+) -> None:
+    ranking = _carregar_ranking(plataforma, top, desde)
+    meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
+    imprimir_jogos_para_repetir(jogos_para_repetir(ranking, meus_videos))
 
 
 # Gera o relatorio de aprendizado do meu canal em Markdown, com timestamp no nome.
@@ -861,6 +876,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         "relatorio_meu_canal",
         help="Gera um relatorio Markdown do que funcionou no seu canal (jogos e formatos).",
     )
+
+    repetir = subcomandos.add_parser(
+        "jogos_para_repetir",
+        help="Lista jogos que ja funcionaram comigo e ainda tem janela aberta (vale repetir).",
+    )
+    _adicionar_filtros(repetir)
 
     snapshot = subcomandos.add_parser(
         "salvar_snapshot_ranking",
