@@ -12,8 +12,16 @@ from coletor_youtube import (
     listar_videos_recentes_do_canal,
 )
 from analise_meu_canal import analisar_meu_canal
+from comparacao_meu_canal import (
+    comparar_recomendacoes_com_meu_canal,
+    imprimir_comparacao_meu_canal,
+)
 from config import ler_chave_youtube, ler_id_canal_proprio
-from meus_videos import imprimir_meus_videos_sem_jogo, listar_meus_videos_sem_jogo
+from meus_videos import (
+    imprimir_meus_videos_sem_jogo,
+    ler_meus_videos,
+    listar_meus_videos_sem_jogo,
+)
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
@@ -119,6 +127,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "meus_videos_sem_jogo":
         meus_videos_sem_jogo_interativo()
+        return 0
+
+    if comando == "comparar_recomendacoes_meu_canal":
+        comparar_recomendacoes_meu_canal_interativo(plataforma, top, desde)
         return 0
 
     if comando == "salvar_snapshot_ranking":
@@ -423,6 +435,17 @@ def coletar_meu_canal_interativo(limite: int, limite_comentarios: int) -> None:
 # Lista os meus videos em que nenhum jogo foi detectado, lendo data/meus_videos.csv.
 def meus_videos_sem_jogo_interativo() -> None:
     imprimir_meus_videos_sem_jogo(listar_meus_videos_sem_jogo(MEUS_VIDEOS_CSV))
+
+
+# Cruza o ranking atual com os meus videos (data/meus_videos.csv) e mostra, por jogo,
+# se a recomendacao funcionou comigo. Nao altera o ranking.
+def comparar_recomendacoes_meu_canal_interativo(
+    plataforma: str | None = None, top: int | None = None, desde: date | None = None
+) -> None:
+    ranking = _carregar_ranking(plataforma, top, desde)
+    meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
+    comparacoes = comparar_recomendacoes_com_meu_canal(ranking, meus_videos)
+    imprimir_comparacao_meu_canal(comparacoes)
 
 
 # Coleta os videos recentes de um canal do YouTube e mostra o resumo.
@@ -802,6 +825,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         "meus_videos_sem_jogo",
         help="Lista os seus videos coletados sem jogo detectado, com sugestao para corrigir.",
     )
+
+    comparar_meu_canal = subcomandos.add_parser(
+        "comparar_recomendacoes_meu_canal",
+        help="Cruza o ranking com os seus videos para ver se a recomendacao funcionou comigo.",
+    )
+    _adicionar_filtros(comparar_meu_canal)
 
     snapshot = subcomandos.add_parser(
         "salvar_snapshot_ranking",
