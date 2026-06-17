@@ -1006,17 +1006,56 @@ def _adicionar_filtros(subparser: argparse.ArgumentParser) -> None:
 
 
 # Monta o parser de argumentos do CLI, com um subcomando para cada acao.
+# Cheat-sheet por categoria + exemplos, mostrado no fim de `--help`. argparse nao agrupa
+# subcomandos por categoria na lista automatica, entao a organizacao por tema vive aqui.
+_EPILOGO_AJUDA = """\
+Categorias de comandos:
+  Ranking:        ranking, exportar_ranking, oportunidades
+  Coleta:         adicionar_video, importar_videos, coletar_video_youtube,
+                  coletar_videos_youtube, coletar_canal_youtube
+  Meu canal:      listar_meus_videos_youtube, coletar_meu_canal, meus_videos_sem_jogo,
+                  comparar_recomendacoes_meu_canal, jogos_para_repetir,
+                  jogos_que_nao_funcionaram
+  Evidencias:     evidencias_jogo, exportar_evidencias_jogos
+  Relatorios:     relatorio_diario, relatorio_meu_canal, relatorio_calibracao
+  Monitoramento:  salvar_snapshot_ranking, comparar_rankings, ranking_watchlist,
+                  adicionar_watchlist, listar_watchlist, remover_watchlist
+  Qualidade:      validar_dados, diagnosticar_dados, videos_sem_jogo, adicionar_alias,
+                  status_sistema
+  Rotina:         rotina_diaria (faz o fluxo do dia inteiro em um comando)
+
+Exemplos:
+  python src/main.py ranking --top 10
+  python src/main.py rotina_diaria --limite 20 --comentarios 50 --top 10
+  python src/main.py coletar_meu_canal --limite 10 --dry-run
+  python src/main.py validar_dados
+  python src/main.py evidencias_jogo "R.E.P.O." --tipo curto
+
+Filtros comuns (ranking e relatorios): --plataforma NOME, --desde AAAA-MM-DD, --top N.
+Detalhes de um comando: python src/main.py <comando> --help
+"""
+
+
 def _construir_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Recomenda games com potencial para Shorts, Reels e TikTok.",
+        description=(
+            "Recomenda games para Shorts, Reels e TikTok, calibrado pelos resultados reais "
+            "do seu canal. Roda offline sobre CSVs locais; so a coleta do YouTube usa rede."
+        ),
+        epilog=_EPILOGO_AJUDA,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    subcomandos = parser.add_subparsers(dest="comando")
+    subcomandos = parser.add_subparsers(dest="comando", title="comandos", metavar="<comando>")
 
-    ranking = subcomandos.add_parser("ranking", help="Mostra o ranking no terminal.")
+    ranking = subcomandos.add_parser(
+        "ranking",
+        help="Mostra o ranking de jogos recomendados no terminal (comando padrao).",
+    )
     _adicionar_filtros(ranking)
 
     exportar = subcomandos.add_parser(
-        "exportar_ranking", help="Exporta o ranking para um arquivo Markdown."
+        "exportar_ranking",
+        help="Exporta o ranking para um arquivo (Markdown ou CSV) datado em reports/.",
     )
     _adicionar_filtros(exportar)
     exportar.add_argument(
@@ -1026,23 +1065,30 @@ def _construir_parser() -> argparse.ArgumentParser:
         help="Formato do arquivo exportado: md ou csv (padrao: md).",
     )
 
-    subcomandos.add_parser("adicionar_video", help="Cadastra um video manualmente.")
+    subcomandos.add_parser(
+        "adicionar_video",
+        help="Cadastra um video de referencia manualmente (perguntas interativas).",
+    )
 
     importar = subcomandos.add_parser(
-        "importar_videos", help="Importa videos em lote de um CSV externo."
+        "importar_videos",
+        help="Importa videos de referencia em lote de um CSV externo (valida e ignora duplicados).",
     )
     importar.add_argument("origem", help="Caminho do CSV externo a importar.")
 
     subcomandos.add_parser(
-        "diagnosticar_dados", help="Analisa a qualidade dos videos coletados."
+        "diagnosticar_dados",
+        help="Resume a qualidade dos videos coletados (por plataforma, canal, origem).",
     )
 
     subcomandos.add_parser(
-        "videos_sem_jogo", help="Lista videos sem nenhum jogo detectado."
+        "videos_sem_jogo",
+        help="Lista videos de referencia sem jogo detectado, por views (ache aliases faltando).",
     )
 
     alias_parser = subcomandos.add_parser(
-        "adicionar_alias", help="Adiciona um alias a um jogo do jogos_seed.csv."
+        "adicionar_alias",
+        help="Adiciona um alias a um jogo do jogos_seed.csv (melhora a deteccao).",
     )
     alias_parser.add_argument("nome", help="Nome do jogo (ignora maiusculas).")
     alias_parser.add_argument("alias", help="Alias a adicionar ao jogo.")
@@ -1183,12 +1229,12 @@ def _construir_parser() -> argparse.ArgumentParser:
 
     subcomandos.add_parser(
         "comparar_rankings",
-        help="Compara as duas ultimas execucoes salvas no historico.",
+        help="Compara as duas ultimas execucoes do historico (o que subiu, caiu, entrou, saiu).",
     )
 
     oportunidades = subcomandos.add_parser(
         "oportunidades",
-        help="Lista apenas os jogos com alto potencial de oportunidade.",
+        help="Atalho do ranking so com os jogos de janela aberta (alta oportunidade).",
     )
     _adicionar_filtros(oportunidades)
 
