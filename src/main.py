@@ -22,6 +22,7 @@ from meus_videos import (
     ler_meus_videos,
     listar_meus_videos_sem_jogo,
 )
+from relatorio_meu_canal import gerar_relatorio_meu_canal_markdown
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
@@ -131,6 +132,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "comparar_recomendacoes_meu_canal":
         comparar_recomendacoes_meu_canal_interativo(plataforma, top, desde)
+        return 0
+
+    if comando == "relatorio_meu_canal":
+        relatorio_meu_canal_interativo()
         return 0
 
     if comando == "salvar_snapshot_ranking":
@@ -446,6 +451,15 @@ def comparar_recomendacoes_meu_canal_interativo(
     meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
     comparacoes = comparar_recomendacoes_com_meu_canal(ranking, meus_videos)
     imprimir_comparacao_meu_canal(comparacoes)
+
+
+# Gera o relatorio de aprendizado do meu canal em Markdown, com timestamp no nome.
+def relatorio_meu_canal_interativo() -> None:
+    meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
+    data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    caminho_relatorio = REPORTS_DIR / f"meu_canal_{data_hora}.md"
+    gerar_relatorio_meu_canal_markdown(caminho_relatorio, meus_videos)
+    print(f"Relatorio gerado em: {caminho_relatorio}")
 
 
 # Coleta os videos recentes de um canal do YouTube e mostra o resumo.
@@ -831,6 +845,11 @@ def _construir_parser() -> argparse.ArgumentParser:
         help="Cruza o ranking com os seus videos para ver se a recomendacao funcionou comigo.",
     )
     _adicionar_filtros(comparar_meu_canal)
+
+    subcomandos.add_parser(
+        "relatorio_meu_canal",
+        help="Gera um relatorio Markdown do que funcionou no seu canal (jogos e formatos).",
+    )
 
     snapshot = subcomandos.add_parser(
         "salvar_snapshot_ranking",
