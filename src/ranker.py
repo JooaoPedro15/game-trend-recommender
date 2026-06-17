@@ -9,7 +9,11 @@ from evidencias_jogo import (
     calcular_score_evidencia_nicho,
     evidencia_de_video,
 )
-from fit_canal import calcular_fit_real_jogo, sugerir_formato_por_historico
+from fit_canal import (
+    calcular_fit_real_jogo,
+    formato_destacado_do_jogo,
+    sugerir_formato_por_historico,
+)
 from modelos import (
     CanalReferencia,
     JogoSeed,
@@ -73,6 +77,7 @@ def calcular_ranking(
         score_descoberta = _calcular_score_descoberta(videos_jogo)
         score_saturacao = _calcular_score_saturacao(canais_diferentes)
         fit_real = calcular_fit_real_jogo(nome_jogo, meus_videos)
+        formato_destacado = formato_destacado_do_jogo(nome_jogo, meus_videos)
         score_final_base = (
             score_tendencia * 0.40
             + score_fit_canal * 0.35
@@ -116,6 +121,9 @@ def calcular_ranking(
                 score_saturacao,
                 score_tendencia,
                 len(videos_jogo),
+                fit_real,
+                formato_destacado,
+                score_nicho,
             ),
             score_evidencia_criadores=round(score_evidencia, 1),
             score_evidencia_nicho=round(score_nicho, 1),
@@ -275,14 +283,58 @@ def _calcular_score_descoberta(videos: list[VideoColetado]) -> float:
     return _limitar(proporcao_videos * 70 + bonus_repeticao)
 
 
-# Traduz os scores em um proximo passo pratico para o creator. Regras simples,
-# em ordem de prioridade: veto por saturacao vem antes de qualquer "priorizar".
+# Traduz os scores em um proximo passo pratico para o creator. Acoes curtas e operacionais
+# (o que fazer com o jogo), nunca roteiro/tom/gancho. Duas ramificacoes:
+# 1) Ja tenho historico real do jogo no meu canal (fit_real != None): a decisao usa o que
+#    de fato funcionou comigo (resultado real e formato), em vez da evidencia externa.
+# 2) Sem historico: cai nas regras de evidencia externa (comportamento anterior), agora
+#    tambem sensiveis a evidencia no meu nicho.
 def _gerar_acao_recomendada(
     score_oportunidade: float,
     score_fit_canal: float,
     score_saturacao: float,
     score_tendencia: float,
     videos_encontrados: int,
+    fit_real: float | None = None,
+    formato_destacado: str | None = None,
+    score_evidencia_nicho: float = 0.0,
+) -> str:
+    if fit_real is not None:
+        return _acao_por_historico_real(fit_real, formato_destacado)
+
+    return _acao_por_evidencia_externa(
+        score_oportunidade,
+        score_fit_canal,
+        score_saturacao,
+        score_tendencia,
+        videos_encontrados,
+        score_evidencia_nicho,
+    )
+
+
+# Decisao quando ja gravei esse jogo: falhou comigo -> segurar; um formato funcionou e
+# outro nao -> priorizar o que funcionou; funcionou bem no geral -> repetir; resultado
+# mediano -> monitorar. Usa os mesmos limiares do ajuste de fit real do ranking.
+def _acao_por_historico_real(fit_real: float, formato_destacado: str | None) -> str:
+    if fit_real <= FIT_REAL_BAIXO:
+        return "Monitorar antes de repetir"
+    if formato_destacado:
+        return f"Priorizar {formato_destacado}"
+    if fit_real >= FIT_REAL_ALTO:
+        return "Repetir teste"
+    return "Monitorar por mais alguns dias"
+
+
+# Decisao sem historico do jogo no meu canal: veto por saturacao primeiro; depois aposta
+# por oportunidade/fit; forte validacao no meu nicho tambem pede um teste; pouca evidencia
+# pede pesquisa; resto e observar.
+def _acao_por_evidencia_externa(
+    score_oportunidade: float,
+    score_fit_canal: float,
+    score_saturacao: float,
+    score_tendencia: float,
+    videos_encontrados: int,
+    score_evidencia_nicho: float,
 ) -> str:
     if score_saturacao <= 40:
         return "Evitar por saturacao alta"
@@ -291,6 +343,9 @@ def _gerar_acao_recomendada(
         return "Priorizar para video longo"
 
     if score_oportunidade >= 75:
+        return "Testar em Short"
+
+    if score_evidencia_nicho >= 70:
         return "Testar em Short"
 
     if videos_encontrados <= 1 and score_tendencia < 70:

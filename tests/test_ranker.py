@@ -724,5 +724,65 @@ def test_ranking_sem_historico_usa_formato_da_acao():
     assert resultado.formato_sugerido == "longo"  # vem da acao "Priorizar para video longo"
 
 
+# --- Sprint 9.4: acao recomendada usa o feedback real do meu canal ---
+
+def test_acao_por_historico_real_cobre_as_regras():
+    # funcionou muito bem comigo -> repetir
+    assert _gerar_acao_recomendada(80, 90, 90, 100, 3, fit_real=70.0) == "Repetir teste"
+    # falhou comigo -> segurar
+    assert (
+        _gerar_acao_recomendada(80, 90, 90, 100, 3, fit_real=20.0)
+        == "Monitorar antes de repetir"
+    )
+    # funcionou num formato e nao noutro -> priorizar o que funcionou (vence o "repetir")
+    assert (
+        _gerar_acao_recomendada(80, 90, 90, 100, 3, fit_real=70.0, formato_destacado="curto")
+        == "Priorizar curto"
+    )
+    # historico mediano e sem formato destacado -> observar
+    assert (
+        _gerar_acao_recomendada(80, 90, 90, 100, 3, fit_real=45.0)
+        == "Monitorar por mais alguns dias"
+    )
+
+
+def test_acao_sem_historico_considera_evidencia_no_nicho():
+    # nunca testei, oportunidade media, mas forte validacao no meu nicho -> testar
+    assert (
+        _gerar_acao_recomendada(50, 60, 90, 50, 3, score_evidencia_nicho=80.0)
+        == "Testar em Short"
+    )
+
+
+def test_ranking_acao_repetir_quando_funcionou_bem():
+    jogo, video = _jogo_e_video_simples()
+    meus = [_meu_video_fit("Repo", "c", 900000, 120000, 8000, tipo="curto")]  # 1 formato forte
+
+    resultado = calcular_ranking([jogo], [video], [], meus)[0]
+
+    assert resultado.acao_recomendada == "Repetir teste"
+
+
+def test_ranking_acao_monitorar_quando_falhou_comigo():
+    jogo, video = _jogo_e_video_simples()
+    meus = [_meu_video_fit("Repo", "c", 80000, 200, 50, tipo="curto")]  # fraco ~4
+
+    resultado = calcular_ranking([jogo], [video], [], meus)[0]
+
+    assert resultado.acao_recomendada == "Monitorar antes de repetir"
+
+
+def test_ranking_acao_prioriza_formato_que_funcionou():
+    jogo, video = _jogo_e_video_simples()
+    meus = [
+        _meu_video_fit("Repo", "c", 900000, 120000, 8000, tipo="curto"),  # forte
+        _meu_video_fit("Repo", "l", 80000, 200, 50, tipo="longo"),        # fraco
+    ]
+
+    resultado = calcular_ranking([jogo], [video], [], meus)[0]
+
+    assert resultado.acao_recomendada == "Priorizar curto"
+
+
 if __name__ == "__main__":
     unittest.main()

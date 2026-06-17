@@ -70,6 +70,27 @@ def sugerir_formato_por_historico(
     return _formato_da_acao(resultado.acao_recomendada)
 
 
+# O formato que se destacou no historico do jogo: o melhor formato sugerivel com media boa
+# (>= LIMIAR), DESDE QUE outro formato testado tenha ficado abaixo do limiar — ou seja,
+# "funcionou num formato e nao em outro". Devolve None quando nao ha esse contraste (sem
+# historico, um unico formato, ou formatos todos bons/ruins juntos). Usado pela acao
+# recomendada para sugerir "Priorizar <formato>".
+def formato_destacado_do_jogo(jogo: str, meus_videos: list[MeuVideo]) -> str | None:
+    desempenho = {
+        tipo: media
+        for tipo, media in desempenho_por_formato_do_jogo(jogo, meus_videos).items()
+        if tipo in FORMATOS_SUGERIVEIS
+    }
+    if len(desempenho) < 2:
+        return None
+
+    melhor_tipo, melhor_media = max(desempenho.items(), key=lambda item: item[1])
+    algum_formato_fraco = any(media < LIMIAR_FORMATO_BOM for media in desempenho.values())
+    if melhor_media >= LIMIAR_FORMATO_BOM and algum_formato_fraco:
+        return melhor_tipo
+    return None
+
+
 # Extrai o formato ja implicito na acao recomendada do ranking (o "atual"): "longo" ou
 # "curto"; "" quando a acao nao aponta um formato especifico.
 def _formato_da_acao(acao_recomendada: str) -> str:
