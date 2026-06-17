@@ -53,6 +53,27 @@ class DetalheVideoYoutube:
     tipo_video: str
 
 
+# Um video do meu proprio canal, ja com o jogo detectado e as metricas reais.
+# Representa resultado real do canal (nao referencia de terceiros): foi publicado,
+# tem views/likes/comentarios meus. Persistido em data/meus_videos.csv.
+# data_coleta e score_resultado_real sao derivados na hora de salvar, por isso ficam
+# fora deste dataclass de entrada.
+@dataclass
+class MeuVideo:
+    video_id: str
+    titulo: str
+    url: str
+    data_publicacao: str
+    jogo_detectado: str
+    confianca_jogo: str
+    fonte_deteccao: str
+    views: int
+    likes: int
+    comentarios: int
+    tipo_video: str = "desconhecido"
+    status_analise: str = "pendente"
+
+
 @dataclass
 class ResultadoRecomendacao:
     jogo: JogoSeed
