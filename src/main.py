@@ -81,6 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     jogo = getattr(args, "jogo", None)
     tipo = getattr(args, "tipo", None)
     comentarios = getattr(args, "comentarios", 20)
+    dry_run = getattr(args, "dry_run", False)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -127,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if comando == "coletar_meu_canal":
-        coletar_meu_canal_interativo(limite, comentarios)
+        coletar_meu_canal_interativo(limite, comentarios, dry_run)
         return 0
 
     if comando == "meus_videos_sem_jogo":
@@ -159,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if comando == "rotina_diaria":
-        rotina_diaria_interativo(limite, comentarios, top, plataforma, desde)
+        rotina_diaria_interativo(limite, comentarios, top, plataforma, desde, dry_run)
         return 0
 
     if comando == "salvar_snapshot_ranking":
@@ -435,10 +436,31 @@ def listar_meus_videos_youtube_interativo(limite: int) -> None:
         print(f"{posicao}. {video['video_id']} | {video['titulo']}")
 
 
+# Mostra o plano da coleta do canal (sem chamar a API nem salvar), com o custo de quota.
+# Usado pelo modo dry-run do coletar_meu_canal e da rotina_diaria.
+def _plano_coleta_meu_canal(limite: int, limite_comentarios: int) -> None:
+    channel_id = ler_id_canal_proprio()
+    alvo = channel_id or "(MEU_CANAL_YOUTUBE_ID nao configurado)"
+    quota = 2 + 2 * limite
+    print(
+        f"DRY-RUN: coletaria ate {limite} videos recentes do canal {alvo} "
+        f"(comentarios por video: {limite_comentarios}), detectaria o jogo de cada um e "
+        f"salvaria/atualizaria {MEUS_VIDEOS_CSV}."
+    )
+    print(f"DRY-RUN: custo estimado de quota: {quota} unidades. Nenhuma chamada de API feita.")
+
+
 # Coleta e analisa os meus videos recentes (detalhe + comentarios + deteccao de jogo) e
 # salva o resultado em data/meus_videos.csv. Checa chave e canal antes de tocar a API,
-# para avisar de forma clara em vez de quebrar no meio.
-def coletar_meu_canal_interativo(limite: int, limite_comentarios: int) -> None:
+# para avisar de forma clara em vez de quebrar no meio. Com dry_run, so mostra o plano.
+def coletar_meu_canal_interativo(
+    limite: int, limite_comentarios: int, dry_run: bool = False
+) -> None:
+    if dry_run:
+        _plano_coleta_meu_canal(limite, limite_comentarios)
+        print("DRY-RUN: nada foi salvo.")
+        return
+
     if ler_chave_youtube() is None:
         print(
             "YOUTUBE_API_KEY nao definida no ambiente. "
@@ -541,11 +563,14 @@ def rotina_diaria_interativo(
     top: int | None = None,
     plataforma: str | None = None,
     desde: date | None = None,
+    dry_run: bool = False,
 ) -> None:
     print("=== Rotina Diaria ===")
+    if dry_run:
+        print("(DRY-RUN: simulando, nada sera salvo)")
     print()
 
-    resumo_coleta = _rotina_coletar_meu_canal(limite, limite_comentarios)
+    resumo_coleta = _rotina_coletar_meu_canal(limite, limite_comentarios, dry_run)
 
     print()
     diagnosticar_dados_interativo()
@@ -558,18 +583,31 @@ def rotina_diaria_interativo(
     mostrar_oportunidades(plataforma, top, desde)
 
     print()
-    salvar_snapshot_ranking_interativo(plataforma, top, desde)
+    if dry_run:
+        print(f"DRY-RUN: salvaria um snapshot do ranking em {HISTORICO_CSV}.")
+    else:
+        salvar_snapshot_ranking_interativo(plataforma, top, desde)
 
     print()
-    relatorios = _rotina_exportar_relatorios(plataforma, top, desde)
+    relatorios = _rotina_exportar_relatorios(plataforma, top, desde, dry_run)
 
     print()
     _imprimir_resumo_rotina(resumo_coleta, filtrar_oportunidades(ranking), relatorios)
+    if dry_run:
+        print()
+        print("DRY-RUN: nada foi salvo (sem coleta, snapshot ou relatorios).")
 
 
 # Passo de coleta da rotina: coleta e analisa o meu canal (reusa analisar_meu_canal). Pula
-# de forma limpa, sem tocar a rede, se faltar chave ou canal. Devolve o resumo ou None.
-def _rotina_coletar_meu_canal(limite: int, limite_comentarios: int) -> dict | None:
+# de forma limpa, sem tocar a rede, se faltar chave ou canal. Com dry_run, so mostra o
+# plano (sem API). Devolve o resumo ou None.
+def _rotina_coletar_meu_canal(
+    limite: int, limite_comentarios: int, dry_run: bool = False
+) -> dict | None:
+    if dry_run:
+        _plano_coleta_meu_canal(limite, limite_comentarios)
+        return None
+
     if ler_chave_youtube() is None or ler_id_canal_proprio() is None:
         print(
             "Coleta do canal pulada: YOUTUBE_API_KEY e/ou MEU_CANAL_YOUTUBE_ID nao "
@@ -594,10 +632,14 @@ def _rotina_coletar_meu_canal(limite: int, limite_comentarios: int) -> dict | No
 
 
 # Passo de relatorios da rotina: exporta ranking e calibracao em Markdown com timestamp.
-# Devolve a lista de caminhos gerados.
+# Devolve a lista de caminhos gerados. Com dry_run, so mostra o que seria gerado.
 def _rotina_exportar_relatorios(
-    plataforma: str | None, top: int | None, desde: date | None
+    plataforma: str | None, top: int | None, desde: date | None, dry_run: bool = False
 ) -> list[str]:
+    if dry_run:
+        print(f"DRY-RUN: geraria os relatorios de ranking e calibracao em {REPORTS_DIR}.")
+        return []
+
     ranking = _carregar_ranking(plataforma, top, desde)
     meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
     data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -1014,6 +1056,11 @@ def _construir_parser() -> argparse.ArgumentParser:
         default=20,
         help="Quantos comentarios por video puxar para ajudar na deteccao (padrao: 20).",
     )
+    meu_canal.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simula: mostra o plano e o custo de quota, sem chamar a API nem salvar.",
+    )
 
     subcomandos.add_parser(
         "meus_videos_sem_jogo",
@@ -1057,6 +1104,11 @@ def _construir_parser() -> argparse.ArgumentParser:
         type=_top_valido,
         default=20,
         help="Quantos comentarios por video puxar na coleta (padrao: 20).",
+    )
+    rotina.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simula o fluxo: nao coleta, nao salva snapshot e nao gera relatorios.",
     )
 
     repetir = subcomandos.add_parser(
