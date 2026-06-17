@@ -25,6 +25,7 @@ from meus_videos import (
 from relatorio_meu_canal import gerar_relatorio_meu_canal_markdown
 from repetir_jogos import imprimir_jogos_para_repetir, jogos_para_repetir
 from jogos_falhos import imprimir_jogos_que_nao_funcionaram, jogos_que_nao_funcionaram
+from relatorio_calibracao import gerar_relatorio_calibracao_markdown
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
@@ -146,6 +147,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "jogos_que_nao_funcionaram":
         jogos_que_nao_funcionaram_interativo(plataforma, top, desde)
+        return 0
+
+    if comando == "relatorio_calibracao":
+        relatorio_calibracao_interativo()
         return 0
 
     if comando == "salvar_snapshot_ranking":
@@ -500,6 +505,16 @@ def relatorio_meu_canal_interativo() -> None:
     data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
     caminho_relatorio = REPORTS_DIR / f"meu_canal_{data_hora}.md"
     gerar_relatorio_meu_canal_markdown(caminho_relatorio, meus_videos)
+    print(f"Relatorio gerado em: {caminho_relatorio}")
+
+
+# Gera o relatorio de calibracao (ranking atual x meus videos) em Markdown, com timestamp.
+def relatorio_calibracao_interativo() -> None:
+    ranking = _carregar_ranking()
+    meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
+    data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    caminho_relatorio = REPORTS_DIR / f"calibracao_ranking_{data_hora}.md"
+    gerar_relatorio_calibracao_markdown(caminho_relatorio, ranking, meus_videos)
     print(f"Relatorio gerado em: {caminho_relatorio}")
 
 
@@ -890,6 +905,11 @@ def _construir_parser() -> argparse.ArgumentParser:
     subcomandos.add_parser(
         "relatorio_meu_canal",
         help="Gera um relatorio Markdown do que funcionou no seu canal (jogos e formatos).",
+    )
+
+    subcomandos.add_parser(
+        "relatorio_calibracao",
+        help="Gera um relatorio Markdown de como os dados do seu canal influenciam o ranking.",
     )
 
     repetir = subcomandos.add_parser(
