@@ -1,7 +1,12 @@
 # Game Trend Recommender
 
-A local, file-based MVP that ranks games by their potential for short-form video
-(YouTube Shorts, Reels, TikTok) on the Roberto Careca channel.
+**Decide which game to record next.** A local, file-based tool that ranks games by their
+short-form potential (YouTube Shorts, Reels, TikTok) and calibrates that ranking with the
+**real results of your own channel** (built for the Roberto Careca channel).
+
+It scores from real signals with transparent heuristics — **not an LLM** — and points at
+*which* game and format to bet on. It never writes the script, hook or tone: the creative
+call stays with you.
 
 ## Problem
 
@@ -10,7 +15,7 @@ Catching a game while it is still rising — before it saturates — is hard to 
 hand across many channels and platforms. This tool turns manually collected video
 data into a ranked, **explainable** shortlist of games worth covering.
 
-It is an early MVP and a future building block of a larger "Creator Intelligence Platform".
+It is a **v1.0 MVP** and a future building block of a larger "Creator Intelligence Platform".
 
 ## Current features
 
@@ -42,9 +47,13 @@ It is an early MVP and a future building block of a larger "Creator Intelligence
   are calibrated by your history, and shortlists surface games worth repeating or ones that
   underdelivered, plus a calibration report — see
   [`docs/ranking_calibration.md`](docs/ranking_calibration.md).
+- **Operation:** a one-command daily routine, a `--dry-run` mode for the collectors, a
+  data-quality checklist and a system-status health-check.
 
-No scraping, no database, no AI yet. The only network features are the optional YouTube
-collectors above; everything else runs offline from local CSVs.
+The system scores with transparent heuristics over real signals — **no LLM, no scraping,
+no database**. The only network features are the optional YouTube collectors above;
+everything else runs offline from local CSVs. It organizes evidence and points at what to
+test — it never writes scripts, hooks or tone of voice.
 
 ## Tech stack
 
@@ -109,6 +118,31 @@ python src/main.py ranking
 Both read the CSVs in `data/`, detect the games mentioned in the videos, and print the
 ranking ordered by final score.
 
+## Main workflow
+
+Everything runs offline from the CSVs in `data/`; only the YouTube collectors use the
+network. A typical day:
+
+1. **Configure** (only for YouTube collection) — set `YOUTUBE_API_KEY` and, for your own
+   channel, `MEU_CANAL_YOUTUBE_ID` in your shell. Keep the real values in `.env` /
+   `.env.local`, which are gitignored — **never commit them** (see "Key safety" below).
+2. **Check the system** — `python src/main.py status_sistema`: what is configured and how
+   much data exists.
+3. **Validate the data** — `python src/main.py validar_dados`: flags problems
+   (`info` / `aviso` / `critico`) before you trust the ranking.
+4. **Collect your channel** — `python src/main.py coletar_meu_canal --limite 20`: detects
+   the game in your recent videos and measures their real result. Add `--dry-run` to preview
+   the plan and quota cost without spending or saving.
+5. **Run the daily routine** — `python src/main.py rotina_diaria --top 10`: collects,
+   diagnoses, ranks, saves a snapshot and exports reports, all in one command.
+6. **Read the ranking and evidence** — `python src/main.py ranking --top 10` and
+   `python src/main.py evidencias_jogo "<game>"`.
+7. **See how it did with you, and report** — `python src/main.py comparar_recomendacoes_meu_canal`
+   and the short daily report `python src/main.py relatorio_diario`.
+
+Steps 2, 3, 6 and 7 are fully offline; steps 4 and 5 use the network only for the
+collection part.
+
 ## CLI commands
 
 | Command | What it does |
@@ -124,13 +158,17 @@ ranking ordered by final score.
 | `coletar_videos_youtube <ids.txt>` | Batch-fetch YouTube videos from a file with one video id per line (**needs `YOUTUBE_API_KEY`**). |
 | `coletar_canal_youtube <channel_id> [--limite N]` | Fetch a channel's recent uploads (default 5) and save them (**needs `YOUTUBE_API_KEY`**). |
 | `listar_meus_videos_youtube [--limite N]` | List your own channel's recent video ids and titles, without saving (**needs `YOUTUBE_API_KEY` + `MEU_CANAL_YOUTUBE_ID`**). |
-| `coletar_meu_canal [--limite N] [--comentarios M]` | Collect your channel's recent videos, detect the game, score the real result and save to `data/meus_videos.csv` (**needs `YOUTUBE_API_KEY` + `MEU_CANAL_YOUTUBE_ID`**). |
+| `coletar_meu_canal [--limite N] [--comentarios M] [--dry-run]` | Collect your channel's recent videos, detect the game, score the real result and save to `data/meus_videos.csv` (**needs `YOUTUBE_API_KEY` + `MEU_CANAL_YOUTUBE_ID`**). `--dry-run` previews the plan and quota cost without calling the API or saving. |
 | `meus_videos_sem_jogo` | List your own videos with no detected game, sorted by views, with a fix suggestion (offline). |
 | `comparar_recomendacoes_meu_canal` | Cross the ranking with your real results to see whether each recommendation worked for you (offline). |
 | `relatorio_meu_canal` | Export a Markdown learning report (best videos, top games, formats, gaps) to `reports/` (offline). |
 | `jogos_para_repetir` | List games that already worked for you and still have an open window — lower-risk bets (offline). |
 | `jogos_que_nao_funcionaram` | List games with strong external evidence that still underdelivered for you — do not repeat blindly (offline). |
 | `relatorio_calibracao` | Export a Markdown calibration report showing how your channel data is shaping the ranking, to `reports/` (offline). |
+| `relatorio_diario [filters]` | Export a short daily executive report (top games, opportunities, repeat/avoid lists, evidence, links) to `reports/` (offline). |
+| `rotina_diaria [--limite N] [--comentarios M] [filters] [--dry-run]` | Run the whole daily flow in one command: collect the channel, diagnose, rank, save a snapshot and export reports. Skips collection cleanly without the keys. |
+| `validar_dados` | Data-quality checklist before trusting the ranking — `info` / `aviso` / `critico` with suggestions (offline, read-only). |
+| `status_sistema` | Health-check: what is configured and how much data exists (offline, read-only). |
 | `oportunidades` | List only the games with high opportunity potential (a filtered shortlist). |
 | `salvar_snapshot_ranking` | Append the current ranking to a timestamped history CSV. |
 | `comparar_rankings` | Compare the two most recent saved snapshots (who rose, fell, is new or gone). |
@@ -151,7 +189,8 @@ action, the repeat/underdelivered shortlists and the calibration report).
 
 Shared options for `ranking`, `exportar_ranking`, `oportunidades`,
 `salvar_snapshot_ranking`, `ranking_watchlist`, `exportar_evidencias_jogos`,
-`comparar_recomendacoes_meu_canal`, `jogos_para_repetir` and `jogos_que_nao_funcionaram`:
+`comparar_recomendacoes_meu_canal`, `jogos_para_repetir`, `jogos_que_nao_funcionaram`,
+`relatorio_diario` and `rotina_diaria`:
 
 | Option | Description |
 |--------|-------------|
@@ -173,9 +212,11 @@ auto-generated help.
 Only the YouTube collectors — `coletar_video_youtube`, `coletar_videos_youtube`,
 `coletar_canal_youtube`, plus the own-channel commands `listar_meus_videos_youtube` and
 `coletar_meu_canal` — touch the network. Everything else (ranking, history, watchlist,
-CSV import, diagnostics, alias management, report export, `meus_videos_sem_jogo`,
-`comparar_recomendacoes_meu_canal` and `relatorio_meu_canal`) works fully offline from the
-local CSVs, with **no API key**.
+CSV import, diagnostics, alias management, report export, the own-channel analysis
+commands, and the operation/quality commands `validar_dados`, `status_sistema`,
+`relatorio_diario` and `relatorio_calibracao`) works fully offline from the local CSVs,
+with **no API key**. `rotina_diaria` uses the network only for its collection step and
+runs the rest offline.
 
 **Setup:**
 
@@ -354,7 +395,12 @@ pushing.
 
 ## Project status
 
-Early MVP under active development. Data is mostly manual — CSV import and manual entry —
-plus optional YouTube collection (single video, id batch, or a channel's recent uploads).
-No scraping, dashboard or AI yet. The ranking weights are uncalibrated heuristics, so the
-project is pre-1.0 and stabilizing.
+**v1.0 — a working MVP.** The full loop is in place: collect (manual entry, CSV import, or
+YouTube), rank explainably, learn from your own channel, calibrate the ranking with those
+real results, and the day-to-day operation commands (daily routine, dry-run, data
+validation, status).
+
+Honest limits: the ranking weights and calibration thresholds are deliberate **heuristics,
+not yet tuned** against a large body of real results; the data is still mostly manual; and
+there is no scraping, dashboard or LLM. Tuning those thresholds as more channel data
+arrives is the main next step (see Roadmap).
