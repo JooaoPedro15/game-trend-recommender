@@ -28,6 +28,7 @@ from jogos_falhos import imprimir_jogos_que_nao_funcionaram, jogos_que_nao_funci
 from relatorio_calibracao import gerar_relatorio_calibracao_markdown
 from status_sistema import coletar_status, imprimir_status
 from relatorio_diario import gerar_relatorio_diario_markdown
+from validacao_dados import imprimir_validacao, validar_dados
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
@@ -158,6 +159,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "status_sistema":
         status_sistema_interativo()
+        return 0
+
+    if comando == "validar_dados":
+        validar_dados_interativo()
         return 0
 
     if comando == "rotina_diaria":
@@ -542,6 +547,23 @@ def relatorio_meu_canal_interativo() -> None:
     caminho_relatorio = REPORTS_DIR / f"meu_canal_{data_hora}.md"
     gerar_relatorio_meu_canal_markdown(caminho_relatorio, meus_videos)
     print(f"Relatorio gerado em: {caminho_relatorio}")
+
+
+# Valida a qualidade dos dados antes de confiar no ranking. So leitura, nao altera nada.
+def validar_dados_interativo() -> None:
+    videos = ler_videos_coletados(VIDEOS_CSV)
+    jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
+    canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
+    meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
+    problemas = validar_dados(
+        videos,
+        jogos,
+        canais,
+        meus_videos,
+        chave_configurada=ler_chave_youtube() is not None,
+        canal_configurado=ler_id_canal_proprio() is not None,
+    )
+    imprimir_validacao(problemas)
 
 
 # Mostra um health-check do sistema: configuracoes e quantidades de dados. So leitura.
@@ -1107,6 +1129,11 @@ def _construir_parser() -> argparse.ArgumentParser:
         help="Gera um relatorio executivo curto do dia para decidir os proximos jogos.",
     )
     _adicionar_filtros(relatorio_diario)
+
+    subcomandos.add_parser(
+        "validar_dados",
+        help="Checklist de qualidade dos dados antes de confiar no ranking (info/aviso/critico).",
+    )
 
     subcomandos.add_parser(
         "status_sistema",
