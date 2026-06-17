@@ -9,7 +9,9 @@ from leitor_csv import _ler_linhas
 from meus_videos import (
     CAMPOS_MEU_VIDEO,
     calcular_score_resultado_real,
+    listar_meus_videos_sem_jogo,
     salvar_meu_video,
+    sugestao_deteccao,
 )
 from modelos import MeuVideo
 
@@ -97,3 +99,40 @@ def test_score_salvo_no_csv(tmp_path):
 
     linhas = _ler_linhas(caminho)
     assert float(linhas[0]["score_resultado_real"]) > 0
+
+
+def _sem_jogo(video_id, views) -> MeuVideo:
+    return MeuVideo(
+        video_id=video_id,
+        titulo=f"video misterioso {video_id}",
+        url=f"https://www.youtube.com/watch?v={video_id}",
+        data_publicacao="2026-06-10",
+        jogo_detectado="",
+        confianca_jogo="nao_detectado",
+        fonte_deteccao="nao_detectado",
+        views=views,
+        likes=10,
+        comentarios=1,
+        tipo_video="curto",
+    )
+
+
+def test_listar_meus_videos_sem_jogo_filtra_e_ordena(tmp_path):
+    caminho = tmp_path / "meus_videos.csv"
+    salvar_meu_video(caminho, _meu_video(video_id="comjogo", views=100))  # tem jogo detectado
+    salvar_meu_video(caminho, _sem_jogo("sem1", views=300))
+    salvar_meu_video(caminho, _sem_jogo("sem2", views=900))
+
+    sem = listar_meus_videos_sem_jogo(caminho)
+
+    assert [video.video_id for video in sem] == ["sem2", "sem1"]
+    assert all(video.jogo_detectado == "" for video in sem)
+
+
+def test_listar_meus_videos_sem_jogo_csv_inexistente(tmp_path):
+    assert listar_meus_videos_sem_jogo(tmp_path / "nao_existe.csv") == []
+
+
+def test_sugestao_deteccao_com_e_sem_marcador():
+    assert "alias" in sugestao_deteccao("Jogo: Algum Misterio")
+    assert "Jogo: Nome" in sugestao_deteccao("ISSO me assustou demais")

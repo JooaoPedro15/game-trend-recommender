@@ -9,7 +9,8 @@ import csv
 from datetime import date
 from pathlib import Path
 
-from leitor_csv import _ler_linhas
+from detector_jogo import PADRAO_EXPLICITO
+from leitor_csv import _ler_linhas, _para_int
 from metricas_video import calcular_score_viralidade_video
 from modelos import MeuVideo, VideoColetado
 
@@ -120,3 +121,63 @@ def _reescrever_csv(caminho: Path, linhas: list[dict]) -> None:
         escritor = csv.DictWriter(arquivo, fieldnames=CAMPOS_MEU_VIDEO)
         escritor.writeheader()
         escritor.writerows(linhas)
+
+
+# Le os meus videos salvos no CSV de volta para objetos MeuVideo. Os campos derivados
+# (data_coleta, score_resultado_real) ficam no CSV mas nao no MeuVideo de entrada.
+def ler_meus_videos(caminho: str | Path) -> list[MeuVideo]:
+    return [_linha_para_meu_video(linha) for linha in _ler_linhas(caminho)]
+
+
+# Converte uma linha do CSV em MeuVideo (inverso de _meu_video_para_linha).
+def _linha_para_meu_video(linha: dict[str, str]) -> MeuVideo:
+    return MeuVideo(
+        video_id=linha.get("video_id", "").strip(),
+        titulo=linha.get("titulo", "").strip(),
+        url=linha.get("url", "").strip(),
+        data_publicacao=linha.get("data_publicacao", "").strip(),
+        jogo_detectado=linha.get("jogo_detectado", "").strip(),
+        confianca_jogo=linha.get("confianca_jogo", "").strip(),
+        fonte_deteccao=linha.get("fonte_deteccao", "").strip(),
+        views=_para_int(linha.get("views"), 0),
+        likes=_para_int(linha.get("likes"), 0),
+        comentarios=_para_int(linha.get("comentarios"), 0),
+        tipo_video=linha.get("tipo_video", "").strip() or "desconhecido",
+        status_analise=linha.get("status_analise", "").strip() or "pendente",
+    )
+
+
+# Retorna os meus videos sem jogo detectado (jogo_detectado vazio), ordenados por views
+# (desc) para atacar primeiro o buraco que mais custa. Usa a deteccao ja salva no CSV —
+# nao re-detecta e nao usa IA.
+def listar_meus_videos_sem_jogo(caminho: str | Path) -> list[MeuVideo]:
+    sem_jogo = [video for video in ler_meus_videos(caminho) if not video.jogo_detectado.strip()]
+    return sorted(sem_jogo, key=lambda video: video.views, reverse=True)
+
+
+# Sugestao operacional simples (sem IA) para destravar a deteccao de um video: se o titulo
+# ja cita o jogo de forma explicita ("Jogo: X"), o que falta e um alias; senao, o caminho
+# mais confiavel e marcar "Jogo: Nome" na descricao.
+def sugestao_deteccao(titulo: str) -> str:
+    if PADRAO_EXPLICITO.search(titulo or ""):
+        return "adicionar alias para o jogo citado no titulo"
+    return 'usar padrao "Jogo: Nome" na descricao'
+
+
+# Mostra no terminal os meus videos sem jogo detectado, com os dados uteis e a sugestao.
+def imprimir_meus_videos_sem_jogo(videos: list[MeuVideo]) -> None:
+    print("=== Meus Videos sem Jogo Detectado ===")
+    print()
+    if not videos:
+        print("Todos os meus videos coletados tem um jogo detectado.")
+        return
+
+    print(f"Total: {len(videos)}")
+    print()
+    for video in videos:
+        print(f"- {video.titulo}")
+        print(f"  Data: {video.data_publicacao} | Views: {video.views}")
+        print(f"  Deteccao: {video.confianca_jogo} (fonte: {video.fonte_deteccao})")
+        print(f"  URL: {video.url}")
+        print(f"  Sugestao: {sugestao_deteccao(video.titulo)}")
+        print()

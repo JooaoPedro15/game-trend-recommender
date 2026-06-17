@@ -13,6 +13,7 @@ from coletor_youtube import (
 )
 from analise_meu_canal import analisar_meu_canal
 from config import ler_chave_youtube, ler_id_canal_proprio
+from meus_videos import imprimir_meus_videos_sem_jogo, listar_meus_videos_sem_jogo
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
@@ -114,6 +115,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "coletar_meu_canal":
         coletar_meu_canal_interativo(limite, comentarios)
+        return 0
+
+    if comando == "meus_videos_sem_jogo":
+        meus_videos_sem_jogo_interativo()
         return 0
 
     if comando == "salvar_snapshot_ranking":
@@ -413,6 +418,11 @@ def coletar_meu_canal_interativo(limite: int, limite_comentarios: int) -> None:
     print(f"Videos novos: {resumo['novos']}")
     print(f"Videos atualizados: {resumo['atualizados']}")
     print(f"Erros: {resumo['erros']}")
+
+
+# Lista os meus videos em que nenhum jogo foi detectado, lendo data/meus_videos.csv.
+def meus_videos_sem_jogo_interativo() -> None:
+    imprimir_meus_videos_sem_jogo(listar_meus_videos_sem_jogo(MEUS_VIDEOS_CSV))
 
 
 # Coleta os videos recentes de um canal do YouTube e mostra o resumo.
@@ -786,6 +796,11 @@ def _construir_parser() -> argparse.ArgumentParser:
         type=_top_valido,
         default=20,
         help="Quantos comentarios por video puxar para ajudar na deteccao (padrao: 20).",
+    )
+
+    subcomandos.add_parser(
+        "meus_videos_sem_jogo",
+        help="Lista os seus videos coletados sem jogo detectado, com sugestao para corrigir.",
     )
 
     snapshot = subcomandos.add_parser(
