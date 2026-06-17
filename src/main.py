@@ -11,7 +11,8 @@ from coletor_youtube import (
     coletar_videos_por_ids,
     listar_videos_recentes_do_canal,
 )
-from config import ler_id_canal_proprio
+from analise_meu_canal import analisar_meu_canal
+from config import ler_chave_youtube, ler_id_canal_proprio
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
@@ -40,6 +41,7 @@ from evidencias_jogo import (
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
 VIDEOS_CSV = DATA_DIR / "videos_coletados.csv"
+MEUS_VIDEOS_CSV = DATA_DIR / "meus_videos.csv"
 HISTORICO_CSV = DATA_DIR / "historico_rankings.csv"
 WATCHLIST_CSV = DATA_DIR / "watchlist_jogos.csv"
 REPORTS_DIR = BASE_DIR / "reports"
@@ -64,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     limite = getattr(args, "limite", 5)
     jogo = getattr(args, "jogo", None)
     tipo = getattr(args, "tipo", None)
+    comentarios = getattr(args, "comentarios", 20)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -107,6 +110,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "listar_meus_videos_youtube":
         listar_meus_videos_youtube_interativo(limite)
+        return 0
+
+    if comando == "coletar_meu_canal":
+        coletar_meu_canal_interativo(limite, comentarios)
         return 0
 
     if comando == "salvar_snapshot_ranking":
@@ -369,6 +376,43 @@ def listar_meus_videos_youtube_interativo(limite: int) -> None:
 
     for posicao, video in enumerate(videos, start=1):
         print(f"{posicao}. {video['video_id']} | {video['titulo']}")
+
+
+# Coleta e analisa os meus videos recentes (detalhe + comentarios + deteccao de jogo) e
+# salva o resultado em data/meus_videos.csv. Checa chave e canal antes de tocar a API,
+# para avisar de forma clara em vez de quebrar no meio.
+def coletar_meu_canal_interativo(limite: int, limite_comentarios: int) -> None:
+    if ler_chave_youtube() is None:
+        print(
+            "YOUTUBE_API_KEY nao definida no ambiente. "
+            "Defina a variavel antes de coletar do YouTube (veja .env.example)."
+        )
+        return
+
+    channel_id = ler_id_canal_proprio()
+    if channel_id is None:
+        print(
+            "MEU_CANAL_YOUTUBE_ID nao definido no ambiente. "
+            "Defina a variavel antes de analisar o seu canal (veja .env.example)."
+        )
+        return
+
+    jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
+    try:
+        resumo = analisar_meu_canal(
+            channel_id, jogos, MEUS_VIDEOS_CSV, limite, limite_comentarios
+        )
+    except RuntimeError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    print("=== Analise do Meu Canal ===")
+    print(f"Videos analisados: {resumo['analisados']}")
+    print(f"Jogos detectados: {resumo['jogos_detectados']}")
+    print(f"Jogos nao detectados: {resumo['jogos_nao_detectados']}")
+    print(f"Videos novos: {resumo['novos']}")
+    print(f"Videos atualizados: {resumo['atualizados']}")
+    print(f"Erros: {resumo['erros']}")
 
 
 # Coleta os videos recentes de um canal do YouTube e mostra o resumo.
@@ -725,6 +769,23 @@ def _construir_parser() -> argparse.ArgumentParser:
         type=_top_valido,
         default=10,
         help="Quantos videos recentes listar (padrao: 10).",
+    )
+
+    meu_canal = subcomandos.add_parser(
+        "coletar_meu_canal",
+        help="Coleta e analisa seus videos recentes, detecta o jogo e salva em meus_videos.csv.",
+    )
+    meu_canal.add_argument(
+        "--limite",
+        type=_top_valido,
+        default=5,
+        help="Quantos videos recentes analisar (padrao: 5).",
+    )
+    meu_canal.add_argument(
+        "--comentarios",
+        type=_top_valido,
+        default=20,
+        help="Quantos comentarios por video puxar para ajudar na deteccao (padrao: 20).",
     )
 
     snapshot = subcomandos.add_parser(
