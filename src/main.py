@@ -26,6 +26,7 @@ from relatorio_meu_canal import gerar_relatorio_meu_canal_markdown
 from repetir_jogos import imprimir_jogos_para_repetir, jogos_para_repetir
 from jogos_falhos import imprimir_jogos_que_nao_funcionaram, jogos_que_nao_funcionaram
 from relatorio_calibracao import gerar_relatorio_calibracao_markdown
+from status_sistema import coletar_status, imprimir_status
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
@@ -151,6 +152,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "relatorio_calibracao":
         relatorio_calibracao_interativo()
+        return 0
+
+    if comando == "status_sistema":
+        status_sistema_interativo()
         return 0
 
     if comando == "salvar_snapshot_ranking":
@@ -506,6 +511,21 @@ def relatorio_meu_canal_interativo() -> None:
     caminho_relatorio = REPORTS_DIR / f"meu_canal_{data_hora}.md"
     gerar_relatorio_meu_canal_markdown(caminho_relatorio, meus_videos)
     print(f"Relatorio gerado em: {caminho_relatorio}")
+
+
+# Mostra um health-check do sistema: configuracoes e quantidades de dados. So leitura.
+def status_sistema_interativo() -> None:
+    status = coletar_status(
+        chave_configurada=ler_chave_youtube() is not None,
+        canal_configurado=ler_id_canal_proprio() is not None,
+        caminho_videos=VIDEOS_CSV,
+        caminho_meus_videos=MEUS_VIDEOS_CSV,
+        caminho_jogos=DATA_DIR / "jogos_seed.csv",
+        caminho_canais=DATA_DIR / "canais_referencia.csv",
+        caminho_historico=HISTORICO_CSV,
+        dir_relatorios=REPORTS_DIR,
+    )
+    imprimir_status(status)
 
 
 # Gera o relatorio de calibracao (ranking atual x meus videos) em Markdown, com timestamp.
@@ -910,6 +930,11 @@ def _construir_parser() -> argparse.ArgumentParser:
     subcomandos.add_parser(
         "relatorio_calibracao",
         help="Gera um relatorio Markdown de como os dados do seu canal influenciam o ranking.",
+    )
+
+    subcomandos.add_parser(
+        "status_sistema",
+        help="Mostra um health-check: configuracoes e quantidades de dados (so leitura).",
     )
 
     repetir = subcomandos.add_parser(
