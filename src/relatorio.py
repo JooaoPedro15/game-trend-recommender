@@ -29,6 +29,7 @@ def gerar_relatorio_markdown(caminho: str | Path, ranking) -> None:
             linhas.append(f"Tendencia: {resultado.score_tendencia:.1f}")
             linhas.append(f"Fit com o canal: {resultado.score_fit_canal:.1f}")
             linhas.append(f"Fit real (meu canal): {_formatar_fit_real(resultado.score_fit_real)}")
+            linhas.append(f"Formato sugerido: {resultado.formato_sugerido or 'n/d'}")
             linhas.append(f"Descoberta: {resultado.score_descoberta:.1f}")
             linhas.append(f"Saturacao: {resultado.score_saturacao:.1f}")
             linhas.append(f"Oportunidade: {resultado.score_oportunidade:.1f}")
@@ -68,6 +69,7 @@ CAMPOS_CSV = [
     "score_tendencia",
     "score_fit_canal",
     "score_fit_real",
+    "formato_sugerido",
     "score_descoberta",
     "score_saturacao",
     "score_oportunidade",
@@ -99,6 +101,7 @@ def gerar_relatorio_csv(caminho: str | Path, ranking) -> None:
                     "score_fit_real": (
                         "" if resultado.score_fit_real is None else resultado.score_fit_real
                     ),
+                    "formato_sugerido": resultado.formato_sugerido,
                     "score_descoberta": resultado.score_descoberta,
                     "score_saturacao": resultado.score_saturacao,
                     "score_oportunidade": resultado.score_oportunidade,

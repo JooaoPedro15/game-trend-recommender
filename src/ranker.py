@@ -9,7 +9,7 @@ from evidencias_jogo import (
     calcular_score_evidencia_nicho,
     evidencia_de_video,
 )
-from fit_canal import calcular_fit_real_jogo
+from fit_canal import calcular_fit_real_jogo, sugerir_formato_por_historico
 from modelos import (
     CanalReferencia,
     JogoSeed,
@@ -90,39 +90,39 @@ def calcular_ranking(
         score_evidencia = calcular_score_evidencia_criadores(evidencias_videos)
         score_nicho = calcular_score_evidencia_nicho(evidencias_videos)
 
-        resultados.append(
-            ResultadoRecomendacao(
-                jogo=jogo,
-                score_final=round(score_final, 1),
-                score_tendencia=round(score_tendencia, 1),
-                score_fit_canal=round(score_fit_canal, 1),
-                score_descoberta=round(score_descoberta, 1),
-                score_saturacao=round(score_saturacao, 1),
-                videos_encontrados=len(videos_jogo),
-                canais_diferentes=canais_diferentes,
-                motivo=_gerar_motivo(
-                    jogo,
-                    videos_jogo,
-                    score_tendencia,
-                    score_descoberta,
-                    score_saturacao,
-                    score_oportunidade,
-                    canais_diferentes,
-                ),
-                videos=videos_ordenados,
-                score_oportunidade=round(score_oportunidade, 1),
-                acao_recomendada=_gerar_acao_recomendada(
-                    score_oportunidade,
-                    score_fit_canal,
-                    score_saturacao,
-                    score_tendencia,
-                    len(videos_jogo),
-                ),
-                score_evidencia_criadores=round(score_evidencia, 1),
-                score_evidencia_nicho=round(score_nicho, 1),
-                score_fit_real=round(fit_real, 1) if fit_real is not None else None,
-            )
+        resultado = ResultadoRecomendacao(
+            jogo=jogo,
+            score_final=round(score_final, 1),
+            score_tendencia=round(score_tendencia, 1),
+            score_fit_canal=round(score_fit_canal, 1),
+            score_descoberta=round(score_descoberta, 1),
+            score_saturacao=round(score_saturacao, 1),
+            videos_encontrados=len(videos_jogo),
+            canais_diferentes=canais_diferentes,
+            motivo=_gerar_motivo(
+                jogo,
+                videos_jogo,
+                score_tendencia,
+                score_descoberta,
+                score_saturacao,
+                score_oportunidade,
+                canais_diferentes,
+            ),
+            videos=videos_ordenados,
+            score_oportunidade=round(score_oportunidade, 1),
+            acao_recomendada=_gerar_acao_recomendada(
+                score_oportunidade,
+                score_fit_canal,
+                score_saturacao,
+                score_tendencia,
+                len(videos_jogo),
+            ),
+            score_evidencia_criadores=round(score_evidencia, 1),
+            score_evidencia_nicho=round(score_nicho, 1),
+            score_fit_real=round(fit_real, 1) if fit_real is not None else None,
         )
+        resultado.formato_sugerido = sugerir_formato_por_historico(resultado, meus_videos)
+        resultados.append(resultado)
 
     return sorted(resultados, key=lambda resultado: resultado.score_final, reverse=True)
 

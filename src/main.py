@@ -272,6 +272,7 @@ def imprimir_ranking(ranking) -> None:
         print(f"Tendencia: {resultado.score_tendencia:.1f}")
         print(f"Fit com o canal: {resultado.score_fit_canal:.1f}")
         print(f"Fit real (meu canal): {_formatar_fit_real(resultado.score_fit_real)}")
+        print(f"Formato sugerido: {resultado.formato_sugerido or 'n/d'}")
         print(f"Descoberta: {resultado.score_descoberta:.1f}")
         print(f"Saturacao: {resultado.score_saturacao:.1f}")
         print(f"Oportunidade: {resultado.score_oportunidade:.1f}")

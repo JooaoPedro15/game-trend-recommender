@@ -93,3 +93,6 @@ class ResultadoRecomendacao:
     # Fit real medido nos meus videos (0-100); None quando o jogo nunca apareceu no
     # meu canal (sem historico, sem ajuste). Veja src/fit_canal.py e o ranker.
     score_fit_real: float | None = None
+    # Formato operacional sugerido (curto/longo/live) calibrado pelo meu historico, com
+    # fallback para o formato implicito na acao_recomendada; "" quando nenhum aponta um.
+    formato_sugerido: str = ""

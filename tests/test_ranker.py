@@ -631,7 +631,7 @@ def test_ranking_preenche_acao_recomendada():
 
 # Meu video com data antiga: o score_resultado_real fica deterministico (volume +
 # engajamento), sem depender da data de hoje. forte ~66, fraco ~4.
-def _meu_video_fit(jogo, video_id, views, likes, comentarios):
+def _meu_video_fit(jogo, video_id, views, likes, comentarios, tipo="longo"):
     return MeuVideo(
         video_id=video_id,
         titulo=f"meu {video_id}",
@@ -643,7 +643,7 @@ def _meu_video_fit(jogo, video_id, views, likes, comentarios):
         views=views,
         likes=likes,
         comentarios=comentarios,
-        tipo_video="longo",
+        tipo_video=tipo,
     )
 
 
@@ -705,6 +705,23 @@ def test_fit_real_sem_historico_mantem_score():
 
     assert com_fit.score_fit_real is None
     assert com_fit.score_final == base.score_final
+
+
+def test_ranking_calibra_formato_pelo_historico():
+    jogo, video = _jogo_e_video_simples()  # acao do ranking aponta "longo"
+
+    meus = [_meu_video_fit("Repo", "m1", 900000, 120000, 8000, tipo="curto")]  # curto forte
+    resultado = calcular_ranking([jogo], [video], [], meus)[0]
+
+    assert resultado.formato_sugerido == "curto"
+
+
+def test_ranking_sem_historico_usa_formato_da_acao():
+    jogo, video = _jogo_e_video_simples()
+
+    resultado = calcular_ranking([jogo], [video], [])[0]
+
+    assert resultado.formato_sugerido == "longo"  # vem da acao "Priorizar para video longo"
 
 
 if __name__ == "__main__":
