@@ -27,6 +27,7 @@ from repetir_jogos import imprimir_jogos_para_repetir, jogos_para_repetir
 from jogos_falhos import imprimir_jogos_que_nao_funcionaram, jogos_que_nao_funcionaram
 from relatorio_calibracao import gerar_relatorio_calibracao_markdown
 from status_sistema import coletar_status, imprimir_status
+from relatorio_diario import gerar_relatorio_diario_markdown
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
@@ -161,6 +162,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "rotina_diaria":
         rotina_diaria_interativo(limite, comentarios, top, plataforma, desde, dry_run)
+        return 0
+
+    if comando == "relatorio_diario":
+        relatorio_diario_interativo(plataforma, top, desde)
         return 0
 
     if comando == "salvar_snapshot_ranking":
@@ -674,6 +679,20 @@ def _imprimir_resumo_rotina(
         print(f"  #{posicao} {resultado.jogo.nome}")
 
 
+# Gera o relatorio executivo do dia (ranking + meus videos + canais) em Markdown, com
+# timestamp. Curto e voltado a decisao dos proximos jogos a testar.
+def relatorio_diario_interativo(
+    plataforma: str | None = None, top: int | None = None, desde: date | None = None
+) -> None:
+    ranking = _carregar_ranking(plataforma, top, desde)
+    meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
+    canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
+    data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    caminho_relatorio = REPORTS_DIR / f"relatorio_diario_{data_hora}.md"
+    gerar_relatorio_diario_markdown(caminho_relatorio, ranking, meus_videos, canais)
+    print(f"Relatorio gerado em: {caminho_relatorio}")
+
+
 # Gera o relatorio de calibracao (ranking atual x meus videos) em Markdown, com timestamp.
 def relatorio_calibracao_interativo() -> None:
     ranking = _carregar_ranking()
@@ -1082,6 +1101,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         "relatorio_calibracao",
         help="Gera um relatorio Markdown de como os dados do seu canal influenciam o ranking.",
     )
+
+    relatorio_diario = subcomandos.add_parser(
+        "relatorio_diario",
+        help="Gera um relatorio executivo curto do dia para decidir os proximos jogos.",
+    )
+    _adicionar_filtros(relatorio_diario)
 
     subcomandos.add_parser(
         "status_sistema",
