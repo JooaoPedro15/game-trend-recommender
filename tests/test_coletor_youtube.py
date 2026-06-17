@@ -18,9 +18,11 @@ from coletor_youtube import (
     coletar_comentarios,
     coletar_detalhe_video,
     coletar_detalhes_do_canal,
+    coletar_detalhes_em_lote,
     coletar_video_por_id,
     coletar_videos_por_ids,
     listar_ids_recentes_do_canal,
+    listar_todos_ids_do_canal,
     listar_videos_recentes_do_canal,
     ler_ids_de_arquivo,
     obter_playlist_uploads,
@@ -483,3 +485,73 @@ def test_coletar_comentarios_outro_403_levanta_erro(monkeypatch):
 
     with pytest.raises(RuntimeError):
         coletar_comentarios("ABC", 50)
+
+
+# --- Coleta completa: paginacao de ids e detalhes em lote (Sprint 10.9) ---
+
+# channels -> uploads; playlistItems pagina em 2 (VID0,VID1 | VID2); videos.list em lote.
+def _fake_get_json_paginado(url):
+    if "/channels" in url:
+        return {"items": [{"contentDetails": {"relatedPlaylists": {"uploads": "UU_X"}}}]}
+    if "/playlistItems" in url:
+        token = parse_qs(urlparse(url).query).get("pageToken", [None])[0]
+        if token is None:
+            return {
+                "items": [
+                    {"contentDetails": {"videoId": "VID0"}},
+                    {"contentDetails": {"videoId": "VID1"}},
+                ],
+                "nextPageToken": "P2",
+            }
+        return {"items": [{"contentDetails": {"videoId": "VID2"}}]}
+    if "/videos" in url:
+        ids = parse_qs(urlparse(url).query)["id"][0].split(",")
+        return {
+            "items": [
+                {
+                    "id": vid,
+                    "snippet": {
+                        "title": f"titulo {vid}",
+                        "channelTitle": "Meu Canal",
+                        "description": "",
+                        "tags": [],
+                        "publishedAt": "2026-05-01T00:00:00Z",
+                        "liveBroadcastContent": "none",
+                    },
+                    "statistics": {"viewCount": "1", "likeCount": "0", "commentCount": "0"},
+                    "contentDetails": {"duration": "PT1M"},
+                }
+                for vid in ids
+            ]
+        }
+    return {"items": []}
+
+
+def test_listar_todos_ids_pagina_ate_o_fim(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json_paginado)
+
+    assert listar_todos_ids_do_canal("UC_X") == ["VID0", "VID1", "VID2"]
+
+
+def test_listar_todos_ids_respeita_teto(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json_paginado)
+
+    assert listar_todos_ids_do_canal("UC_X", limite_maximo=2) == ["VID0", "VID1"]
+
+
+def test_coletar_detalhes_em_lote_usa_id_do_item(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json_paginado)
+
+    detalhes = coletar_detalhes_em_lote(["VID0", "VID2"])
+
+    assert {d.video_id for d in detalhes} == {"VID0", "VID2"}
+    assert detalhes[0].url == "https://www.youtube.com/watch?v=VID0"
+
+
+def test_coletar_detalhes_em_lote_vazio_nao_chama_api(monkeypatch):
+    monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
+
+    assert coletar_detalhes_em_lote([]) == []

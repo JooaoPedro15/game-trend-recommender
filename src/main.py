@@ -11,7 +11,7 @@ from coletor_youtube import (
     coletar_videos_por_ids,
     listar_videos_recentes_do_canal,
 )
-from analise_meu_canal import analisar_meu_canal
+from analise_meu_canal import analisar_canal_completo, analisar_meu_canal
 from comparacao_meu_canal import (
     comparar_recomendacoes_com_meu_canal,
     imprimir_comparacao_meu_canal,
@@ -84,6 +84,9 @@ def main(argv: list[str] | None = None) -> int:
     tipo = getattr(args, "tipo", None)
     comentarios = getattr(args, "comentarios", 20)
     dry_run = getattr(args, "dry_run", False)
+    todos_videos = getattr(args, "todos_videos", False)
+    comentarios_extra_sem_jogo = getattr(args, "comentarios_extra_sem_jogo", 0)
+    todos_comentarios = getattr(args, "todos_comentarios", False)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -130,7 +133,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if comando == "coletar_meu_canal":
-        coletar_meu_canal_interativo(limite, comentarios, dry_run)
+        coletar_meu_canal_interativo(
+            limite, comentarios, dry_run, todos_videos, comentarios_extra_sem_jogo, todos_comentarios
+        )
         return 0
 
     if comando == "meus_videos_sem_jogo":
@@ -460,14 +465,51 @@ def _plano_coleta_meu_canal(limite: int, limite_comentarios: int) -> None:
     print(f"DRY-RUN: custo estimado de quota: {quota} unidades. Nenhuma chamada de API feita.")
 
 
-# Coleta e analisa os meus videos recentes (detalhe + comentarios + deteccao de jogo) e
-# salva o resultado em data/meus_videos.csv. Checa chave e canal antes de tocar a API,
-# para avisar de forma clara em vez de quebrar no meio. Com dry_run, so mostra o plano.
-def coletar_meu_canal_interativo(
-    limite: int, limite_comentarios: int, dry_run: bool = False
+# Mostra o plano da coleta COMPLETA (--todos-videos), sem chamar a API nem salvar.
+def _plano_coleta_completa(
+    limite_maximo: int | None, limite_comentarios: int, comentarios_extra_sem_jogo: int
 ) -> None:
+    channel_id = ler_id_canal_proprio()
+    alvo = channel_id or "(MEU_CANAL_YOUTUBE_ID nao configurado)"
+    teto = "sem teto" if limite_maximo is None else f"ate {limite_maximo} videos"
+    print(
+        f"DRY-RUN: coletaria TODOS os videos do canal {alvo} ({teto}), paginando a uploads "
+        "playlist; detalhes em lote (videos.list, ~1 unidade por 50 videos)."
+    )
+    extra = (
+        f", e {comentarios_extra_sem_jogo} extra so nos que continuarem sem jogo"
+        if comentarios_extra_sem_jogo > limite_comentarios
+        else ""
+    )
+    print(
+        f"DRY-RUN: comentarios so para videos NAO detectados por titulo/descricao/tags "
+        f"(ate {limite_comentarios}/video{extra})."
+    )
+    print("DRY-RUN: videos ja em meus_videos.csv sao pulados (cache). Nada foi salvo.")
+
+
+# Coleta e analisa os meus videos e salva em data/meus_videos.csv. Sem --todos-videos pega
+# so os recentes (limite, padrao 5); com --todos-videos pega o canal inteiro de forma
+# incremental e economica. Checa chave e canal antes de tocar a API. Com dry_run, so o plano.
+def coletar_meu_canal_interativo(
+    limite: int | None,
+    limite_comentarios: int,
+    dry_run: bool = False,
+    todos_videos: bool = False,
+    comentarios_extra_sem_jogo: int = 0,
+    todos_comentarios: bool = False,
+) -> None:
+    if todos_comentarios:
+        print(
+            "AVISO: --todos-comentarios ainda nao e recomendado (gasto de quota alto) e "
+            "foi ignorado; a coleta usa comentarios so onde o jogo nao foi detectado."
+        )
+
     if dry_run:
-        _plano_coleta_meu_canal(limite, limite_comentarios)
+        if todos_videos:
+            _plano_coleta_completa(limite, limite_comentarios, comentarios_extra_sem_jogo)
+        else:
+            _plano_coleta_meu_canal(limite if limite is not None else 5, limite_comentarios)
         print("DRY-RUN: nada foi salvo.")
         return
 
@@ -487,9 +529,16 @@ def coletar_meu_canal_interativo(
         return
 
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
+
+    if todos_videos:
+        _coletar_meu_canal_completo(
+            channel_id, jogos, limite, limite_comentarios, comentarios_extra_sem_jogo
+        )
+        return
+
     try:
         resumo = analisar_meu_canal(
-            channel_id, jogos, MEUS_VIDEOS_CSV, limite, limite_comentarios
+            channel_id, jogos, MEUS_VIDEOS_CSV, limite if limite is not None else 5, limite_comentarios
         )
     except RuntimeError as erro:
         print(f"Erro: {erro}")
@@ -501,6 +550,39 @@ def coletar_meu_canal_interativo(
     print(f"Jogos nao detectados: {resumo['jogos_nao_detectados']}")
     print(f"Videos novos: {resumo['novos']}")
     print(f"Videos atualizados: {resumo['atualizados']}")
+    print(f"Erros: {resumo['erros']}")
+
+
+# Roda a coleta completa (--todos-videos) e mostra o progresso. limite (se dado) e o teto.
+def _coletar_meu_canal_completo(
+    channel_id: str,
+    jogos,
+    limite_maximo: int | None,
+    limite_comentarios: int,
+    comentarios_extra_sem_jogo: int,
+) -> None:
+    ids_existentes = {video.video_id for video in ler_meus_videos(MEUS_VIDEOS_CSV)}
+    try:
+        resumo = analisar_canal_completo(
+            channel_id,
+            jogos,
+            MEUS_VIDEOS_CSV,
+            ids_existentes,
+            limite_maximo,
+            limite_comentarios,
+            comentarios_extra_sem_jogo,
+        )
+    except RuntimeError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    print("=== Coleta Completa do Meu Canal ===")
+    print(f"Videos encontrados: {resumo['encontrados']}")
+    print(f"Ja em cache (pulados): {resumo['em_cache']}")
+    print(f"Videos analisados: {resumo['analisados']}")
+    print(f"Jogos detectados sem comentarios: {resumo['detectados_sem_comentarios']}")
+    print(f"Jogos detectados por comentarios: {resumo['detectados_por_comentarios']}")
+    print(f"Videos ainda sem jogo: {resumo['sem_jogo']}")
     print(f"Erros: {resumo['erros']}")
 
 
@@ -1134,14 +1216,30 @@ def _construir_parser() -> argparse.ArgumentParser:
     meu_canal.add_argument(
         "--limite",
         type=_top_valido,
-        default=5,
-        help="Quantos videos recentes analisar (padrao: 5).",
+        default=None,
+        help="Sem --todos-videos: quantos recentes analisar (padrao: 5). Com --todos-videos: teto opcional.",
+    )
+    meu_canal.add_argument(
+        "--todos-videos",
+        action="store_true",
+        help="Coleta TODOS os videos do canal (paginado, incremental e economico), nao so os recentes.",
     )
     meu_canal.add_argument(
         "--comentarios",
         type=_top_valido,
         default=20,
-        help="Quantos comentarios por video puxar para ajudar na deteccao (padrao: 20).",
+        help="Comentarios por video, so onde o jogo nao foi detectado por titulo/descricao/tags (padrao: 20).",
+    )
+    meu_canal.add_argument(
+        "--comentarios-extra-sem-jogo",
+        type=_top_valido,
+        default=0,
+        help="Comentarios extra so nos videos que continuarem sem jogo (0 = desligado).",
+    )
+    meu_canal.add_argument(
+        "--todos-comentarios",
+        action="store_true",
+        help="(Ainda nao recomendado) buscaria todos os comentarios; atualmente apenas avisa e e ignorado.",
     )
     meu_canal.add_argument(
         "--dry-run",

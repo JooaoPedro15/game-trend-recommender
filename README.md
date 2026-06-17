@@ -378,7 +378,8 @@ The `.gitignore` blocks caches, local environments, `.env`, secrets, and private
 folders. Keep the committed CSVs as fictional examples or data you are comfortable
 publishing. For real research data, use local files such as `data/videos_coletados.local.csv`
 or a `data/private/` folder that stays out of Git. See `docs/publicacao_github.md` before
-pushing.
+pushing, and run through [`docs/release_checklist.md`](docs/release_checklist.md) before
+making the repository public or cutting a release.
 
 ## Roadmap
 

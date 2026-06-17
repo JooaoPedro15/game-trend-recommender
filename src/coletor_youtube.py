@@ -115,19 +115,12 @@ def _inferir_tipo_video(duracao_segundos: int, item: dict) -> str:
     return "longo"
 
 
-# Busca os detalhes ricos de um video por id (snippet + statistics + contentDetails) e
-# devolve um DetalheVideoYoutube com descricao, tags, duracao e tipo_video inferido.
-# Reutiliza _item_para_video para os campos em comum com VideoColetado. None se nao existir.
-def coletar_detalhe_video(video_id: str) -> DetalheVideoYoutube | None:
-    chave = _exigir_chave()
-    parametros = urlencode(
-        {"part": "snippet,statistics,contentDetails", "id": video_id, "key": chave}
-    )
-    itens = _get_json(f"{API_VIDEOS_URL}?{parametros}").get("items", [])
-    if not itens:
-        return None
-
-    item = itens[0]
+# Converte um item de videos.list em DetalheVideoYoutube. video_id explicito quando se
+# sabe o id pedido (chamada unica); None usa o item["id"] (resposta em lote). Reutiliza
+# _item_para_video para os campos em comum com VideoColetado.
+def _item_para_detalhe(item: dict, video_id: str | None = None) -> DetalheVideoYoutube:
+    if video_id is None:
+        video_id = item.get("id", "")
     base = _item_para_video(item, video_id)
     snippet = item.get("snippet", {})
     duracao_segundos = _duracao_iso_para_segundos(
@@ -146,6 +139,44 @@ def coletar_detalhe_video(video_id: str) -> DetalheVideoYoutube | None:
         duracao_segundos=duracao_segundos,
         tipo_video=_inferir_tipo_video(duracao_segundos, item),
     )
+
+
+# Busca os detalhes ricos de um video por id (snippet + statistics + contentDetails) e
+# devolve um DetalheVideoYoutube com descricao, tags, duracao e tipo_video inferido.
+# None se nao existir.
+def coletar_detalhe_video(video_id: str) -> DetalheVideoYoutube | None:
+    chave = _exigir_chave()
+    parametros = urlencode(
+        {"part": "snippet,statistics,contentDetails", "id": video_id, "key": chave}
+    )
+    itens = _get_json(f"{API_VIDEOS_URL}?{parametros}").get("items", [])
+    if not itens:
+        return None
+    return _item_para_detalhe(itens[0], video_id)
+
+
+# Busca os detalhes de varios videos em UMA chamada (videos.list aceita ate 50 ids por
+# requisicao, custando 1 unidade de quota para o lote inteiro). Devolve um DetalheVideoYoutube
+# por item retornado (videos inexistentes simplesmente nao voltam).
+def coletar_detalhes_em_lote(video_ids: list[str]) -> list[DetalheVideoYoutube]:
+    if not video_ids:
+        return []
+    chave = _exigir_chave()
+    parametros = urlencode(
+        {"part": "snippet,statistics,contentDetails", "id": ",".join(video_ids), "key": chave}
+    )
+    itens = _get_json(f"{API_VIDEOS_URL}?{parametros}").get("items", [])
+    return [_item_para_detalhe(item) for item in itens]
+
+
+# Busca os detalhes de muitos videos quebrando em lotes de 50 (limite da videos.list).
+def coletar_detalhes_em_lote_varios(
+    video_ids: list[str], tamanho_lote: int = 50
+) -> list[DetalheVideoYoutube]:
+    detalhes = []
+    for inicio in range(0, len(video_ids), tamanho_lote):
+        detalhes.extend(coletar_detalhes_em_lote(video_ids[inicio : inicio + tamanho_lote]))
+    return detalhes
 
 
 # Descobre o id da playlist de uploads de um canal (None se o canal nao existir).
@@ -170,6 +201,40 @@ def listar_ids_recentes_do_canal(channel_id: str, limite: int = 5) -> list[str]:
     )
     itens = _get_json(f"{API_PLAYLIST_ITEMS_URL}?{parametros}").get("items", [])
     return [item["contentDetails"]["videoId"] for item in itens]
+
+
+# Lista TODOS os video_ids do canal, paginando a uploads playlist (50 por pagina, 1 unidade
+# de quota por pagina). limite_maximo (opcional) corta a coleta ao atingir N ids — util para
+# um teto seguro na primeira coleta. Lista vazia se o canal nao existir.
+def listar_todos_ids_do_canal(
+    channel_id: str, limite_maximo: int | None = None
+) -> list[str]:
+    playlist = obter_playlist_uploads(channel_id)
+    if playlist is None:
+        return []
+
+    chave = _exigir_chave()
+    ids: list[str] = []
+    pagina = None
+    while True:
+        parametros = {
+            "part": "contentDetails",
+            "playlistId": playlist,
+            "maxResults": 50,
+            "key": chave,
+        }
+        if pagina:
+            parametros["pageToken"] = pagina
+        dados = _get_json(f"{API_PLAYLIST_ITEMS_URL}?{urlencode(parametros)}")
+
+        for item in dados.get("items", []):
+            ids.append(item["contentDetails"]["videoId"])
+            if limite_maximo is not None and len(ids) >= limite_maximo:
+                return ids[:limite_maximo]
+
+        pagina = dados.get("nextPageToken")
+        if not pagina:
+            return ids
 
 
 # Lista os videos recentes do canal (uploads playlist) como dicts {video_id, titulo},

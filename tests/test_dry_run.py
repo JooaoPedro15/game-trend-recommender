@@ -79,3 +79,32 @@ def test_coletar_meu_canal_dry_run_via_cli(tmp_path, monkeypatch):
     _preparar(tmp_path, monkeypatch)
 
     assert main.main(["coletar_meu_canal", "--limite", "10", "--dry-run"]) == 0
+
+
+def test_coletar_meu_canal_todos_videos_dry_run(tmp_path, monkeypatch, capsys):
+    _preparar(tmp_path, monkeypatch)
+
+    main.coletar_meu_canal_interativo(
+        None, 20, dry_run=True, todos_videos=True, comentarios_extra_sem_jogo=100
+    )
+
+    saida = capsys.readouterr().out
+    assert "TODOS os videos" in saida
+    assert "sem teto" in saida
+    assert "nada foi salvo" in saida.lower()
+
+
+def test_todos_comentarios_apenas_avisa(tmp_path, monkeypatch, capsys):
+    _preparar(tmp_path, monkeypatch)
+
+    main.coletar_meu_canal_interativo(None, 20, dry_run=True, todos_videos=True, todos_comentarios=True)
+
+    saida = capsys.readouterr().out.lower()
+    assert "todos-comentarios" in saida
+    assert "ignorado" in saida
+
+
+def test_todos_videos_dry_run_via_cli(tmp_path, monkeypatch):
+    _preparar(tmp_path, monkeypatch)
+
+    assert main.main(["coletar_meu_canal", "--todos-videos", "--dry-run"]) == 0
