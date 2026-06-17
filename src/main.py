@@ -158,6 +158,10 @@ def main(argv: list[str] | None = None) -> int:
         status_sistema_interativo()
         return 0
 
+    if comando == "rotina_diaria":
+        rotina_diaria_interativo(limite, comentarios, top, plataforma, desde)
+        return 0
+
     if comando == "salvar_snapshot_ranking":
         salvar_snapshot_ranking_interativo(plataforma, top, desde)
         return 0
@@ -526,6 +530,106 @@ def status_sistema_interativo() -> None:
         dir_relatorios=REPORTS_DIR,
     )
     imprimir_status(status)
+
+
+# Executa o fluxo principal do dia a dia em um comando so, reusando os handlers existentes:
+# coletar meu canal -> diagnostico -> ranking Top N -> oportunidades -> snapshot ->
+# relatorios -> resumo. So a coleta toca a rede; o resto roda offline.
+def rotina_diaria_interativo(
+    limite: int,
+    limite_comentarios: int,
+    top: int | None = None,
+    plataforma: str | None = None,
+    desde: date | None = None,
+) -> None:
+    print("=== Rotina Diaria ===")
+    print()
+
+    resumo_coleta = _rotina_coletar_meu_canal(limite, limite_comentarios)
+
+    print()
+    diagnosticar_dados_interativo()
+
+    print()
+    ranking = _carregar_ranking(plataforma, top, desde)
+    imprimir_ranking(ranking)
+
+    print()
+    mostrar_oportunidades(plataforma, top, desde)
+
+    print()
+    salvar_snapshot_ranking_interativo(plataforma, top, desde)
+
+    print()
+    relatorios = _rotina_exportar_relatorios(plataforma, top, desde)
+
+    print()
+    _imprimir_resumo_rotina(resumo_coleta, filtrar_oportunidades(ranking), relatorios)
+
+
+# Passo de coleta da rotina: coleta e analisa o meu canal (reusa analisar_meu_canal). Pula
+# de forma limpa, sem tocar a rede, se faltar chave ou canal. Devolve o resumo ou None.
+def _rotina_coletar_meu_canal(limite: int, limite_comentarios: int) -> dict | None:
+    if ler_chave_youtube() is None or ler_id_canal_proprio() is None:
+        print(
+            "Coleta do canal pulada: YOUTUBE_API_KEY e/ou MEU_CANAL_YOUTUBE_ID nao "
+            "configurados (rodando com os dados atuais)."
+        )
+        return None
+
+    jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
+    try:
+        resumo = analisar_meu_canal(
+            ler_id_canal_proprio(), jogos, MEUS_VIDEOS_CSV, limite, limite_comentarios
+        )
+    except RuntimeError as erro:
+        print(f"Coleta do canal falhou: {erro} (rodando com os dados atuais).")
+        return None
+
+    print(
+        f"Coleta do canal: {resumo['analisados']} analisados, "
+        f"{resumo['jogos_detectados']} com jogo, {resumo['jogos_nao_detectados']} sem jogo."
+    )
+    return resumo
+
+
+# Passo de relatorios da rotina: exporta ranking e calibracao em Markdown com timestamp.
+# Devolve a lista de caminhos gerados.
+def _rotina_exportar_relatorios(
+    plataforma: str | None, top: int | None, desde: date | None
+) -> list[str]:
+    ranking = _carregar_ranking(plataforma, top, desde)
+    meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
+    data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
+
+    caminho_ranking = REPORTS_DIR / f"ranking_{data_hora}.md"
+    gerar_relatorio_markdown(caminho_ranking, ranking)
+    caminho_calibracao = REPORTS_DIR / f"calibracao_ranking_{data_hora}.md"
+    gerar_relatorio_calibracao_markdown(caminho_calibracao, ranking, meus_videos)
+
+    relatorios = [str(caminho_ranking), str(caminho_calibracao)]
+    for caminho in relatorios:
+        print(f"Relatorio gerado: {caminho}")
+    return relatorios
+
+
+# Resumo final da rotina: numeros da coleta, relatorios e o topo das oportunidades.
+def _imprimir_resumo_rotina(
+    resumo_coleta: dict | None, oportunidades: list, relatorios: list[str]
+) -> None:
+    print("=== Resumo da Rotina ===")
+    if resumo_coleta is None:
+        print("Videos analisados: 0 (coleta pulada)")
+        print("Jogos detectados: 0")
+        print("Jogos nao detectados: 0")
+    else:
+        print(f"Videos analisados: {resumo_coleta['analisados']}")
+        print(f"Jogos detectados: {resumo_coleta['jogos_detectados']}")
+        print(f"Jogos nao detectados: {resumo_coleta['jogos_nao_detectados']}")
+    print(f"Relatorios gerados: {len(relatorios)}")
+    print(f"Top oportunidades: {len(oportunidades)}")
+    for posicao, resultado in oportunidades[:5]:
+        print(f"  #{posicao} {resultado.jogo.nome}")
 
 
 # Gera o relatorio de calibracao (ranking atual x meus videos) em Markdown, com timestamp.
@@ -935,6 +1039,24 @@ def _construir_parser() -> argparse.ArgumentParser:
     subcomandos.add_parser(
         "status_sistema",
         help="Mostra um health-check: configuracoes e quantidades de dados (so leitura).",
+    )
+
+    rotina = subcomandos.add_parser(
+        "rotina_diaria",
+        help="Executa o fluxo diario completo: coleta, diagnostico, ranking, snapshot e relatorios.",
+    )
+    _adicionar_filtros(rotina)
+    rotina.add_argument(
+        "--limite",
+        type=_top_valido,
+        default=5,
+        help="Quantos videos do meu canal coletar (padrao: 5).",
+    )
+    rotina.add_argument(
+        "--comentarios",
+        type=_top_valido,
+        default=20,
+        help="Quantos comentarios por video puxar na coleta (padrao: 20).",
     )
 
     repetir = subcomandos.add_parser(
