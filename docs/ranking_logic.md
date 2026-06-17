@@ -74,6 +74,10 @@ score_oportunidade = tendencia*0.40 + saturacao*0.40 + descoberta*0.20
   (saturação pesa 40%, fit não entra — a oportunidade é do mercado, não sua).
   Velocidade e recência entram indiretamente, via tendência (sem contar duas vezes).
 
+> Quando há histórico do jogo no meu canal (`data/meus_videos.csv`), o `score_final`
+> recebe ainda um **ajuste leve** (±5) pelo `fit_real`. Os pesos base acima não mudam.
+> Detalhes em [`ranking_calibration.md`](ranking_calibration.md).
+
 ## 4. Motivo
 
 Texto explicativo escolhido por uma cadeia de regras sobre os sub-scores
@@ -100,6 +104,11 @@ em ordem de prioridade — o veto vem primeiro:
 | 5 | caso contrário | Monitorar por mais alguns dias |
 
 Os limiares são os mesmos do motivo — número, explicação e ação nunca se contradizem.
+
+> Esta tabela é o ramo **sem histórico** do jogo no meu canal. Quando há histórico
+> (`data/meus_videos.csv`), a ação passa por um ramo de **feedback real** (repetir,
+> priorizar formato, monitorar antes de repetir...) — ver
+> [`ranking_calibration.md`](ranking_calibration.md).
 
 ## Onde tudo aparece
 

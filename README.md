@@ -37,6 +37,11 @@ It is an early MVP and a future building block of a larger "Creator Intelligence
   game in each, measure the **real result**, list videos with no detected game, compare the
   ranking's bets against what actually worked for you, and export a learning report — see
   [`docs/own_channel_learning.md`](docs/own_channel_learning.md).
+- **Ranking calibration:** your own results feed back into the ranking — a measured
+  `fit_real` lightly adjusts the final score, the suggested format and recommended action
+  are calibrated by your history, and shortlists surface games worth repeating or ones that
+  underdelivered, plus a calibration report — see
+  [`docs/ranking_calibration.md`](docs/ranking_calibration.md).
 
 No scraping, no database, no AI yet. The only network features are the optional YouTube
 collectors above; everything else runs offline from local CSVs.
@@ -72,6 +77,10 @@ game-trend-recommender/
 |   |-- analise_meu_canal.py   # own-channel pipeline (collect + detect + save)
 |   |-- comparacao_meu_canal.py # ranking vs. real results (feedback loop)
 |   |-- relatorio_meu_canal.py # own-channel learning report (Markdown)
+|   |-- fit_canal.py           # measured channel fit (fit_real) + format calibration
+|   |-- repetir_jogos.py       # shortlist of games worth repeating
+|   |-- jogos_falhos.py        # shortlist of games that underdelivered for me
+|   |-- relatorio_calibracao.py # ranking calibration report (Markdown)
 |   |-- relatorio.py           # Markdown / CSV report generation
 |   `-- modelos.py             # dataclasses (VideoColetado, JogoSeed, MeuVideo, ...)
 |-- tests/                     # pytest suite
@@ -79,6 +88,7 @@ game-trend-recommender/
 |-- docs/
 |   |-- creator_evidence.md
 |   |-- own_channel_learning.md
+|   |-- ranking_calibration.md
 |   |-- ranking_logic.md
 |   |-- monitoring.md
 |   |-- fluxo_dados.md
@@ -118,6 +128,9 @@ ranking ordered by final score.
 | `meus_videos_sem_jogo` | List your own videos with no detected game, sorted by views, with a fix suggestion (offline). |
 | `comparar_recomendacoes_meu_canal` | Cross the ranking with your real results to see whether each recommendation worked for you (offline). |
 | `relatorio_meu_canal` | Export a Markdown learning report (best videos, top games, formats, gaps) to `reports/` (offline). |
+| `jogos_para_repetir` | List games that already worked for you and still have an open window — lower-risk bets (offline). |
+| `jogos_que_nao_funcionaram` | List games with strong external evidence that still underdelivered for you — do not repeat blindly (offline). |
+| `relatorio_calibracao` | Export a Markdown calibration report showing how your channel data is shaping the ranking, to `reports/` (offline). |
 | `oportunidades` | List only the games with high opportunity potential (a filtered shortlist). |
 | `salvar_snapshot_ranking` | Append the current ranking to a timestamped history CSV. |
 | `comparar_rankings` | Compare the two most recent saved snapshots (who rose, fell, is new or gone). |
@@ -129,12 +142,16 @@ ranking ordered by final score.
 | `exportar_evidencias_jogos` | Export a per-game creator-evidence report to a timestamped Markdown file in `reports/`. |
 
 See [`docs/monitoring.md`](docs/monitoring.md) for the history / comparison / watchlist
-workflow and the recommended routine, and
+workflow and the recommended routine,
 [`docs/own_channel_learning.md`](docs/own_channel_learning.md) for the own-channel
-collection-and-learning loop (the five commands above that read your own channel).
+collection-and-learning loop, and
+[`docs/ranking_calibration.md`](docs/ranking_calibration.md) for how your own results feed
+back into the ranking (`fit_real`, the light score adjustment, the calibrated format and
+action, the repeat/underdelivered shortlists and the calibration report).
 
 Shared options for `ranking`, `exportar_ranking`, `oportunidades`,
-`salvar_snapshot_ranking`, `ranking_watchlist` and `exportar_evidencias_jogos`:
+`salvar_snapshot_ranking`, `ranking_watchlist`, `exportar_evidencias_jogos`,
+`comparar_recomendacoes_meu_canal`, `jogos_para_repetir` and `jogos_que_nao_funcionaram`:
 
 | Option | Description |
 |--------|-------------|
@@ -290,11 +307,16 @@ On top of those, each game also gets:
   the entry window?" (fit is excluded on purpose: the opportunity belongs to the market).
 - a **reason** in plain language, aware of the opportunity signals;
 - a **recommended action** (prioritize a long video, test in a Short, research more,
-  monitor, or avoid due to saturation);
+  monitor, or avoid due to saturation) — when you have channel history for the game, the
+  action and the **suggested format** are calibrated by what actually worked for you;
 - a **creator-evidence score** and a **niche creator-evidence score** — how validated the
   game is by creators in general and by creators similar to your channel. These are reading
   signals only; they do not change the ranking order. See
   [`docs/creator_evidence.md`](docs/creator_evidence.md).
+- a **`fit_real`** — your measured channel fit for the game (average real result of your own
+  videos; `n/d` when untested). Unlike the reading-only signals above, `fit_real` lightly
+  adjusts `score_final` (±5 max), so your own history can nudge the order. See
+  [`docs/ranking_calibration.md`](docs/ranking_calibration.md).
 
 All weights and thresholds are **MVP heuristics** — chosen deliberately but not yet
 calibrated against real channel results (that tuning is on the roadmap). See
@@ -319,9 +341,11 @@ pushing.
 
 ## Roadmap
 
-- Feed the own-channel learning (real results and comparison verdicts) back into the
-  ranking weights — currently the loop only measures and reports.
-- Tune the formula weights after comparing rankings with real channel results.
+- Tune the calibration thresholds (fit_real bands, format/repeat/underdelivered cutoffs)
+  as `meus_videos.csv` grows — the own-channel feedback already nudges the ranking and the
+  recommended action, but the cutoffs are still starting-point heuristics. See
+  [`docs/ranking_calibration.md`](docs/ranking_calibration.md).
+- Tune the base formula weights after comparing rankings with real channel results.
 - Per-video CSV export (the CSV currently has one row per game).
 - Extend automated collection to other platforms (TikTok), keeping private data separate
   from public examples. (YouTube collection — single video, id batch, channel uploads and
