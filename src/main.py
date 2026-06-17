@@ -24,6 +24,7 @@ from meus_videos import (
 )
 from relatorio_meu_canal import gerar_relatorio_meu_canal_markdown
 from repetir_jogos import imprimir_jogos_para_repetir, jogos_para_repetir
+from jogos_falhos import imprimir_jogos_que_nao_funcionaram, jogos_que_nao_funcionaram
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
@@ -141,6 +142,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "jogos_para_repetir":
         jogos_para_repetir_interativo(plataforma, top, desde)
+        return 0
+
+    if comando == "jogos_que_nao_funcionaram":
+        jogos_que_nao_funcionaram_interativo(plataforma, top, desde)
         return 0
 
     if comando == "salvar_snapshot_ranking":
@@ -477,6 +482,16 @@ def jogos_para_repetir_interativo(
     ranking = _carregar_ranking(plataforma, top, desde)
     meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
     imprimir_jogos_para_repetir(jogos_para_repetir(ranking, meus_videos))
+
+
+# Cruza o ranking atual com os meus videos e lista os jogos de alta evidencia externa que
+# mesmo assim renderam pouco comigo (prometiam mas falharam). Nao altera o ranking.
+def jogos_que_nao_funcionaram_interativo(
+    plataforma: str | None = None, top: int | None = None, desde: date | None = None
+) -> None:
+    ranking = _carregar_ranking(plataforma, top, desde)
+    meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
+    imprimir_jogos_que_nao_funcionaram(jogos_que_nao_funcionaram(ranking, meus_videos))
 
 
 # Gera o relatorio de aprendizado do meu canal em Markdown, com timestamp no nome.
@@ -882,6 +897,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         help="Lista jogos que ja funcionaram comigo e ainda tem janela aberta (vale repetir).",
     )
     _adicionar_filtros(repetir)
+
+    nao_funcionaram = subcomandos.add_parser(
+        "jogos_que_nao_funcionaram",
+        help="Lista jogos de alta evidencia externa que renderam pouco comigo (nao repetir cego).",
+    )
+    _adicionar_filtros(nao_funcionaram)
 
     snapshot = subcomandos.add_parser(
         "salvar_snapshot_ranking",
