@@ -16,7 +16,12 @@ from comparacao_meu_canal import (
     comparar_recomendacoes_com_meu_canal,
     imprimir_comparacao_meu_canal,
 )
-from config import ler_chave_youtube, ler_id_canal_proprio
+from config import (
+    ler_chave_youtube,
+    ler_id_canal_proprio,
+    obter_meu_canal_youtube_id,
+    obter_youtube_api_key,
+)
 from meus_videos import (
     imprimir_meus_videos_sem_jogo,
     ler_meus_videos,
@@ -649,10 +654,11 @@ def validar_dados_interativo() -> None:
 
 
 # Mostra um health-check do sistema: configuracoes e quantidades de dados. So leitura.
+# Usa o config centralizado (obter_*) e so reporta configurado/nao — nunca a chave real.
 def status_sistema_interativo() -> None:
     status = coletar_status(
-        chave_configurada=ler_chave_youtube() is not None,
-        canal_configurado=ler_id_canal_proprio() is not None,
+        chave_configurada=obter_youtube_api_key() is not None,
+        canal_configurado=obter_meu_canal_youtube_id() is not None,
         caminho_videos=VIDEOS_CSV,
         caminho_meus_videos=MEUS_VIDEOS_CSV,
         caminho_jogos=DATA_DIR / "jogos_seed.csv",

@@ -254,8 +254,9 @@ does not affect quota (`commentThreads.list` is a flat 1 unit per video).
 - `.env.example` documents only the **name** (`YOUTUBE_API_KEY=`) — **never** a real key.
 - Put the real value in `.env` / `.env.local`, which are gitignored.
 - The code only reads the key from the environment; it is never written into source.
-- `.env` is **not auto-loaded** — export the variable in your shell. (Auto-loading `.env`
-  would need an extra dependency, which has not been added.)
+- `.env` is **auto-loaded** from the project root by `src/config.py` (via the optional
+  `python-dotenv`). If `python-dotenv` is not installed, just export the variables in your
+  shell instead — the project still works.
 - Quota: the free tier is ~10,000 units/day; one video fetch costs 1 unit.
 
 ## Example usage
