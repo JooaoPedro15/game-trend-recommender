@@ -136,3 +136,25 @@ def test_listar_meus_videos_sem_jogo_csv_inexistente(tmp_path):
 def test_sugestao_deteccao_com_e_sem_marcador():
     assert "alias" in sugestao_deteccao("Jogo: Algum Misterio")
     assert "Jogo: Nome" in sugestao_deteccao("ISSO me assustou demais")
+
+
+def test_ler_csv_antigo_sem_novas_colunas_usa_defaults(tmp_path):
+    caminho = tmp_path / "meus_videos.csv"
+    caminho.write_text(
+        "\n".join(
+            [
+                "video_id,data_coleta,data_publicacao,titulo,jogo_detectado,confianca_jogo,fonte_deteccao,url,views,likes,comentarios,tipo_video,score_resultado_real,status_analise",
+                "vid antigo,2026-06-17,2026-06-10,Titulo antigo,,nao_detectado,nao_detectado,https://y/vid,10,1,0,curto,1.0,pendente",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    video = listar_meus_videos_sem_jogo(caminho)[0]
+
+    assert video.descricao == ""
+    assert video.tags == []
+    assert video.duracao_segundos == 0
+    assert video.motivo_nao_detectado == ""
+    assert video.jogo_no_seed is True
+    assert video.comentarios_incompletos is False

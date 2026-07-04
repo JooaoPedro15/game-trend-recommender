@@ -13,11 +13,24 @@ class DeteccaoJogo:
     jogo: JogoSeed | None
     confianca: str
     fonte: str
+    jogo_detectado: str = ""
+    motivo_nao_detectado: str = ""
+    jogo_no_seed: bool = True
+
+    # Preenche a string salva quando o jogo veio de um registro do seed.
+    def __post_init__(self) -> None:
+        if self.jogo is not None and not self.jogo_detectado:
+            self.jogo_detectado = self.jogo.nome
+
+    # Indica se houve um nome detectado, mesmo quando ele ainda nao existe no seed.
+    @property
+    def detectou(self) -> bool:
+        return bool(self.jogo_detectado.strip())
 
 
 # Padrao explicito na descricao: "Jogo: X", "Game: X" ou "Nome do jogo: X".
 PADRAO_EXPLICITO = re.compile(
-    r"^\s*(?:jogo|game|nome do jogo)\s*:\s*(.+)$",
+    r"^\s*(?:jogo|game|nome\s+do\s+jogo)\s*(?::|-)\s*(.+?)\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -48,13 +61,21 @@ def detectar_jogo_em_conteudo(
     tags = tags or []
     comentarios = comentarios or []
 
-    jogo = _detectar_explicito_na_descricao(descricao, jogos)
-    if jogo is not None:
-        return DeteccaoJogo(jogo, "alta", "descricao")
+    for nome_explicito in _extrair_jogos_explicitos(descricao):
+        jogo = _detectar_por_aliases(nome_explicito, jogos)
+        if jogo is not None:
+            return DeteccaoJogo(jogo, "alta", "descricao")
+        return DeteccaoJogo(
+            None,
+            "alta",
+            "descricao",
+            jogo_detectado=nome_explicito,
+            jogo_no_seed=False,
+        )
 
-    jogo = _detectar_por_aliases(" ".join(tags), jogos)
+    jogo = _detectar_por_tag_exata(tags, jogos)
     if jogo is not None:
-        return DeteccaoJogo(jogo, "media", "tags")
+        return DeteccaoJogo(jogo, "alta", "tags")
 
     jogo = _detectar_por_aliases(titulo, jogos)
     if jogo is not None:
@@ -64,25 +85,39 @@ def detectar_jogo_em_conteudo(
     if jogo is not None:
         return DeteccaoJogo(jogo, "baixa", "comentarios")
 
-    return DeteccaoJogo(None, "nao_detectado", "nao_detectado")
+    motivo = _motivo_nao_detectado(titulo, descricao, tags, comentarios)
+    return DeteccaoJogo(
+        None,
+        "nao_detectado",
+        "nao_detectado",
+        motivo_nao_detectado=motivo,
+    )
 
 
-# Procura "Jogo:/Game:/Nome do jogo: <nome>" na descricao e casa o nome citado com um
-# jogo do seed. Retorna o primeiro jogo casado, ou None se nada bater.
-def _detectar_explicito_na_descricao(
-    descricao: str, jogos: list[JogoSeed]
-) -> JogoSeed | None:
+# Procura marcadores explicitos ("Jogo: X", "Game - X") na descricao e devolve os
+# nomes limpos, sem exigir que eles ja existam no seed.
+def _extrair_jogos_explicitos(descricao: str) -> list[str]:
+    nomes = []
     for correspondencia in PADRAO_EXPLICITO.finditer(descricao or ""):
-        jogo = _detectar_por_aliases(correspondencia.group(1), jogos)
-        if jogo is not None:
-            return jogo
-    return None
+        nome = _limpar_nome_extraido(correspondencia.group(1))
+        if nome:
+            nomes.append(nome)
+    return nomes
 
 
 # Primeiro jogo cujo nome/alias aparece no texto (mesma logica de _termo_aparece).
 def _detectar_por_aliases(texto: str, jogos: list[JogoSeed]) -> JogoSeed | None:
     for jogo in jogos:
         if any(_termo_aparece(texto, termo) for termo in _termos_do_jogo(jogo)):
+            return jogo
+    return None
+
+
+# Primeiro jogo cujo nome/alias casa exatamente com uma tag normalizada.
+def _detectar_por_tag_exata(tags: list[str], jogos: list[JogoSeed]) -> JogoSeed | None:
+    tags_normalizadas = {_normalizar_texto(tag) for tag in tags if tag.strip()}
+    for jogo in jogos:
+        if any(_normalizar_texto(termo) in tags_normalizadas for termo in _termos_do_jogo(jogo)):
             return jogo
     return None
 
@@ -118,4 +153,20 @@ def _normalizar_texto(texto: str) -> str:
         if not combining(caractere)
     )
 
-    return texto_sem_acento.casefold()
+    return re.sub(r"\s+", " ", texto_sem_acento).strip().casefold()
+
+
+def _limpar_nome_extraido(nome: str) -> str:
+    nome = re.split(r"\s+#|\s+\||\s{2,}", nome or "", maxsplit=1)[0]
+    return re.sub(r"\s+", " ", nome.strip(" \t-:;,")).strip()
+
+
+def _motivo_nao_detectado(
+    titulo: str,
+    descricao: str,
+    tags: list[str],
+    comentarios: list[str],
+) -> str:
+    if not any([titulo.strip(), descricao.strip(), tags, comentarios]):
+        return "sem_texto_para_detectar"
+    return "nenhum_jogo_do_seed_encontrado_nas_fontes"

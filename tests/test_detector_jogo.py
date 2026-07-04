@@ -101,6 +101,32 @@ def test_em_conteudo_descricao_explicita_tem_confianca_alta():
     assert deteccao.fonte == "descricao"
 
 
+def test_em_conteudo_descricao_explicita_com_hifen_detecta():
+    deteccao = detectar_jogo_em_conteudo(
+        _jogos_exemplo(),
+        titulo="sem pista",
+        descricao="Game - R.E.P.O.",
+    )
+
+    assert deteccao.jogo.nome == "R.E.P.O."
+    assert deteccao.confianca == "alta"
+    assert deteccao.fonte == "descricao"
+
+
+def test_em_conteudo_descricao_explicita_fora_do_seed_nao_descarta():
+    deteccao = detectar_jogo_em_conteudo(
+        _jogos_exemplo(),
+        titulo="sem pista",
+        descricao="Jogo: Dark Hours",
+    )
+
+    assert deteccao.jogo is None
+    assert deteccao.jogo_detectado == "Dark Hours"
+    assert deteccao.confianca == "alta"
+    assert deteccao.fonte == "descricao"
+    assert deteccao.jogo_no_seed is False
+
+
 def test_em_conteudo_detecta_por_tag():
     deteccao = detectar_jogo_em_conteudo(
         _jogos_exemplo(),
@@ -109,7 +135,7 @@ def test_em_conteudo_detecta_por_tag():
     )
 
     assert deteccao.jogo.nome == "R.E.P.O."
-    assert deteccao.confianca == "media"
+    assert deteccao.confianca == "alta"
     assert deteccao.fonte == "tags"
 
 
@@ -148,6 +174,7 @@ def test_em_conteudo_nenhum_jogo_detectado():
     assert deteccao.jogo is None
     assert deteccao.confianca == "nao_detectado"
     assert deteccao.fonte == "nao_detectado"
+    assert deteccao.motivo_nao_detectado
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -53,6 +53,14 @@ class DetalheVideoYoutube:
     tipo_video: str
 
 
+@dataclass
+class ComentariosColetados:
+    textos: list[str] = field(default_factory=list)
+    comentarios_principais: int = 0
+    respostas: int = 0
+    incompleto: bool = False
+
+
 # Um video do meu proprio canal, ja com o jogo detectado e as metricas reais.
 # Representa resultado real do canal (nao referencia de terceiros): foi publicado,
 # tem views/likes/comentarios meus. Persistido em data/meus_videos.csv.
@@ -72,6 +80,14 @@ class MeuVideo:
     comentarios: int
     tipo_video: str = "desconhecido"
     status_analise: str = "pendente"
+    descricao: str = ""
+    tags: list[str] = field(default_factory=list)
+    duracao_segundos: int = 0
+    motivo_nao_detectado: str = ""
+    jogo_no_seed: bool = True
+    comentarios_incompletos: bool = False
+    comentarios_coletados: int = 0
+    respostas_coletadas: int = 0
 
 
 @dataclass

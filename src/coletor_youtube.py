@@ -7,21 +7,24 @@
 
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
-from urllib.error import HTTPError
+from socket import timeout as SocketTimeout
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
 from cache_youtube import CACHE_PATH as CACHE_PADRAO, buscar_no_cache, salvar_no_cache
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv
 from config import ler_chave_youtube
-from modelos import DetalheVideoYoutube, VideoColetado
+from modelos import ComentariosColetados, DetalheVideoYoutube, VideoColetado
 
 
 API_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 API_CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
 API_PLAYLIST_ITEMS_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
 API_COMMENT_THREADS_URL = "https://www.googleapis.com/youtube/v3/commentThreads"
+API_COMMENTS_URL = "https://www.googleapis.com/youtube/v3/comments"
 
 
 # Devolve a chave do ambiente ou levanta RuntimeError com mensagem clara.
@@ -44,6 +47,32 @@ def _get_json(url: str) -> dict:
         raise RuntimeError(
             f"Erro na YouTube Data API (HTTP {erro.code}). Verifique a chave e a quota."
         ) from erro
+
+
+# Executa uma operacao de rede com ate duas novas tentativas quando o problema e timeout.
+def _com_retentativas_timeout(funcao, operacao: str, video_id: str = "", tentativas: int = 3):
+    ultimo_erro = None
+    for _ in range(tentativas):
+        try:
+            return funcao()
+        except Exception as erro:
+            if not _eh_timeout(erro):
+                raise
+            ultimo_erro = erro
+
+    alvo = f" do video {video_id}" if video_id else ""
+    raise RuntimeError(
+        f"Timeout na operacao {operacao}{alvo} apos {tentativas} tentativas."
+    ) from ultimo_erro
+
+
+# Identifica timeout direto ou encapsulado em URLError.
+def _eh_timeout(erro: Exception) -> bool:
+    if isinstance(erro, (TimeoutError, SocketTimeout)):
+        return True
+    if isinstance(erro, URLError) and isinstance(erro.reason, (TimeoutError, SocketTimeout)):
+        return True
+    return False
 
 
 # Busca os dados de um video por id e devolve um VideoColetado.
@@ -149,7 +178,11 @@ def coletar_detalhe_video(video_id: str) -> DetalheVideoYoutube | None:
     parametros = urlencode(
         {"part": "snippet,statistics,contentDetails", "id": video_id, "key": chave}
     )
-    itens = _get_json(f"{API_VIDEOS_URL}?{parametros}").get("items", [])
+    url = f"{API_VIDEOS_URL}?{parametros}"
+    dados = _com_retentativas_timeout(
+        lambda: _get_json(url), "detalhes", video_id
+    )
+    itens = dados.get("items", [])
     if not itens:
         return None
     return _item_para_detalhe(itens[0], video_id)
@@ -165,7 +198,11 @@ def coletar_detalhes_em_lote(video_ids: list[str]) -> list[DetalheVideoYoutube]:
     parametros = urlencode(
         {"part": "snippet,statistics,contentDetails", "id": ",".join(video_ids), "key": chave}
     )
-    itens = _get_json(f"{API_VIDEOS_URL}?{parametros}").get("items", [])
+    url = f"{API_VIDEOS_URL}?{parametros}"
+    dados = _com_retentativas_timeout(
+        lambda: _get_json(url), "detalhes", ",".join(video_ids)
+    )
+    itens = dados.get("items", [])
     return [_item_para_detalhe(item) for item in itens]
 
 
@@ -207,7 +244,9 @@ def listar_ids_recentes_do_canal(channel_id: str, limite: int = 5) -> list[str]:
 # de quota por pagina). limite_maximo (opcional) corta a coleta ao atingir N ids — util para
 # um teto seguro na primeira coleta. Lista vazia se o canal nao existir.
 def listar_todos_ids_do_canal(
-    channel_id: str, limite_maximo: int | None = None
+    channel_id: str,
+    limite_maximo: int | None = None,
+    ao_progresso: Callable[[int, int], None] | None = None,
 ) -> list[str]:
     playlist = obter_playlist_uploads(channel_id)
     if playlist is None:
@@ -216,6 +255,7 @@ def listar_todos_ids_do_canal(
     chave = _exigir_chave()
     ids: list[str] = []
     pagina = None
+    numero_pagina = 0
     while True:
         parametros = {
             "part": "contentDetails",
@@ -226,11 +266,17 @@ def listar_todos_ids_do_canal(
         if pagina:
             parametros["pageToken"] = pagina
         dados = _get_json(f"{API_PLAYLIST_ITEMS_URL}?{urlencode(parametros)}")
+        numero_pagina += 1
 
         for item in dados.get("items", []):
             ids.append(item["contentDetails"]["videoId"])
             if limite_maximo is not None and len(ids) >= limite_maximo:
+                if ao_progresso is not None:
+                    ao_progresso(numero_pagina, len(ids))
                 return ids[:limite_maximo]
+
+        if ao_progresso is not None:
+            ao_progresso(numero_pagina, len(ids))
 
         pagina = dados.get("nextPageToken")
         if not pagina:
@@ -351,15 +397,39 @@ def _comentarios_desativados(erro: HTTPError) -> bool:
     return "commentsDisabled" in motivos
 
 
-# Coleta ate `limite` comentarios de topo (apenas o texto) de um video, via
-# commentThreads.list. Nao guarda nenhum dado pessoal (autor, canal, foto) — so o texto,
-# que ajuda a detectar o nome do jogo. Sem paginacao: no maximo uma pagina por video.
-# Comentarios desativados -> lista vazia, sem quebrar a coleta dos outros videos.
-def coletar_comentarios(video_id: str, limite: int = 50) -> list[str]:
+# Le JSON de um endpoint de comentarios preservando o corpo de HTTPError para detectar
+# comentarios desativados, mas aplicando retry para timeout.
+def _get_json_comentarios(url: str, operacao: str, video_id: str) -> dict:
+    return _com_retentativas_timeout(
+        _ler_json_comentarios(url),
+        operacao,
+        video_id,
+    )
+
+
+# Monta uma funcao leitora para que o retry possa reabrir a URL a cada tentativa.
+def _ler_json_comentarios(url: str):
+    def _ler() -> dict:
+        with urlopen(url, timeout=10) as resposta:
+            return json.load(resposta)
+
+    return _ler
+
+
+# Coleta textos de comentarios principais e respostas de um video. Nao guarda nenhum dado
+# pessoal (autor, canal, foto) — so texto e contagens uteis para diagnostico.
+def coletar_textos_comentarios(
+    video_id: str,
+    limite: int = 50,
+    limite_respostas: int = 20,
+) -> ComentariosColetados:
+    if limite <= 0:
+        return ComentariosColetados()
+
     chave = _exigir_chave()
     parametros = urlencode(
         {
-            "part": "snippet",
+            "part": "snippet,replies",
             "videoId": video_id,
             "maxResults": min(limite, 100),
             "textFormat": "plainText",
@@ -368,23 +438,139 @@ def coletar_comentarios(video_id: str, limite: int = 50) -> list[str]:
     )
     url = f"{API_COMMENT_THREADS_URL}?{parametros}"
     try:
-        with urlopen(url, timeout=10) as resposta:
-            dados = json.load(resposta)
+        dados = _get_json_comentarios(url, "comentarios", video_id)
     except HTTPError as erro:
         if _comentarios_desativados(erro):
-            return []
+            return ComentariosColetados()
         raise RuntimeError(
             f"Erro na YouTube Data API (HTTP {erro.code}). Verifique a chave e a quota."
         ) from erro
 
-    comentarios = []
-    for item in dados.get("items", [])[:limite]:
-        texto = (
-            item.get("snippet", {})
-            .get("topLevelComment", {})
-            .get("snippet", {})
-            .get("textDisplay", "")
-        )
-        if texto:
-            comentarios.append(texto)
-    return comentarios
+    coleta = ComentariosColetados()
+    ids_respostas_vistos: set[str] = set()
+    textos_respostas_vistos: set[str] = set()
+
+    for item in dados.get("items", []):
+        if len(coleta.textos) >= limite:
+            coleta.incompleto = True
+            break
+
+        snippet_thread = item.get("snippet", {})
+        comentario_topo = snippet_thread.get("topLevelComment", {})
+        respostas_antes_thread = coleta.respostas
+        texto_topo = comentario_topo.get("snippet", {}).get("textDisplay", "")
+        if texto_topo:
+            coleta.textos.append(texto_topo)
+            coleta.comentarios_principais += 1
+
+        respostas_embutidas = item.get("replies", {}).get("comments", [])
+        for resposta in respostas_embutidas:
+            if len(coleta.textos) >= limite:
+                coleta.incompleto = True
+                break
+            _adicionar_resposta(coleta, resposta, ids_respostas_vistos, textos_respostas_vistos)
+
+        total_respostas = int(snippet_thread.get("totalReplyCount", 0) or 0)
+        if (
+            total_respostas > len(respostas_embutidas)
+            and limite_respostas > len(respostas_embutidas)
+            and len(coleta.textos) < limite
+        ):
+            _coletar_respostas_adicionais(
+                comentario_topo.get("id", ""),
+                video_id,
+                chave,
+                coleta,
+                ids_respostas_vistos,
+                textos_respostas_vistos,
+                limite,
+                limite_respostas - len(respostas_embutidas),
+            )
+
+        respostas_no_thread = coleta.respostas - respostas_antes_thread
+        if total_respostas > respostas_no_thread:
+            coleta.incompleto = True
+
+    return coleta
+
+
+# Mantem a API antiga: quem so precisa de texto continua recebendo list[str].
+def coletar_comentarios(video_id: str, limite: int = 50) -> list[str]:
+    return coletar_textos_comentarios(video_id, limite).textos
+
+
+def _adicionar_resposta(
+    coleta: ComentariosColetados,
+    resposta: dict,
+    ids_vistos: set[str],
+    textos_vistos: set[str],
+) -> None:
+    resposta_id = resposta.get("id", "")
+    texto = resposta.get("snippet", {}).get("textDisplay", "")
+    if not texto:
+        return
+    if resposta_id and resposta_id in ids_vistos:
+        return
+    if not resposta_id and texto in textos_vistos:
+        return
+
+    if resposta_id:
+        ids_vistos.add(resposta_id)
+    textos_vistos.add(texto)
+    coleta.textos.append(texto)
+    coleta.respostas += 1
+
+
+def _coletar_respostas_adicionais(
+    parent_id: str,
+    video_id: str,
+    chave: str,
+    coleta: ComentariosColetados,
+    ids_vistos: set[str],
+    textos_vistos: set[str],
+    limite_total: int,
+    limite_respostas: int,
+) -> None:
+    if not parent_id or limite_respostas <= 0:
+        coleta.incompleto = True
+        return
+
+    coletadas = 0
+    pagina = None
+    while len(coleta.textos) < limite_total and coletadas < limite_respostas:
+        parametros = {
+            "part": "snippet",
+            "parentId": parent_id,
+            "maxResults": min(100, limite_total - len(coleta.textos), limite_respostas - coletadas),
+            "textFormat": "plainText",
+            "key": chave,
+        }
+        if pagina:
+            parametros["pageToken"] = pagina
+
+        try:
+            dados = _get_json_comentarios(
+                f"{API_COMMENTS_URL}?{urlencode(parametros)}",
+                "respostas",
+                video_id,
+            )
+        except HTTPError as erro:
+            raise RuntimeError(
+                f"Erro na YouTube Data API (HTTP {erro.code}). Verifique a chave e a quota."
+            ) from erro
+
+        antes = coleta.respostas
+        for resposta in dados.get("items", []):
+            if len(coleta.textos) >= limite_total or coletadas >= limite_respostas:
+                coleta.incompleto = True
+                break
+            _adicionar_resposta(coleta, resposta, ids_vistos, textos_vistos)
+            if coleta.respostas > antes:
+                coletadas += 1
+                antes = coleta.respostas
+
+        pagina = dados.get("nextPageToken")
+        if not pagina:
+            return
+
+    coleta.incompleto = True

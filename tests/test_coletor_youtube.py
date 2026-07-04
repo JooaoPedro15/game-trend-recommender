@@ -454,6 +454,50 @@ def test_coletar_comentarios_devolve_so_o_texto(monkeypatch):
     assert coletar_comentarios("ABC", 50) == textos
 
 
+def test_coletar_comentarios_inclui_respostas_e_respostas_adicionais(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+
+    def _urlopen(url, timeout=10):
+        if "commentThreads" in url:
+            return _RespostaFake(
+                {
+                    "items": [
+                        {
+                            "snippet": {
+                                "totalReplyCount": 2,
+                                "topLevelComment": {
+                                    "id": "C1",
+                                    "snippet": {"textDisplay": "comentario principal"},
+                                },
+                            },
+                            "replies": {
+                                "comments": [
+                                    {"snippet": {"textDisplay": "resposta carregada"}}
+                                ]
+                            },
+                        }
+                    ]
+                }
+            )
+        if "comments" in url:
+            return _RespostaFake(
+                {
+                    "items": [
+                        {"snippet": {"textDisplay": "resposta adicional"}},
+                    ]
+                }
+            )
+        raise AssertionError(f"endpoint inesperado: {url}")
+
+    monkeypatch.setattr(coletor_youtube, "urlopen", _urlopen)
+
+    assert coletar_comentarios("ABC", 10) == [
+        "comentario principal",
+        "resposta carregada",
+        "resposta adicional",
+    ]
+
+
 def test_coletar_comentarios_respeita_limite(monkeypatch):
     monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
     textos = [f"comentario {i}" for i in range(10)]
@@ -532,6 +576,40 @@ def test_listar_todos_ids_pagina_ate_o_fim(monkeypatch):
     monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json_paginado)
 
     assert listar_todos_ids_do_canal("UC_X") == ["VID0", "VID1", "VID2"]
+
+
+def test_listar_todos_ids_pagina_tres_paginas_e_nao_para_em_50(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+
+    def _fake_tres_paginas(url):
+        if "/channels" in url:
+            return {"items": [{"contentDetails": {"relatedPlaylists": {"uploads": "UU_X"}}}]}
+        if "/playlistItems" in url:
+            token = parse_qs(urlparse(url).query).get("pageToken", [None])[0]
+            if token is None:
+                inicio, proximo = 0, "P2"
+            elif token == "P2":
+                inicio, proximo = 50, "P3"
+            else:
+                inicio, proximo = 100, None
+            payload = {
+                "items": [
+                    {"contentDetails": {"videoId": f"VID{i}"}}
+                    for i in range(inicio, inicio + 25)
+                ]
+            }
+            if proximo:
+                payload["nextPageToken"] = proximo
+            return payload
+        return {"items": []}
+
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_tres_paginas)
+
+    ids = listar_todos_ids_do_canal("UC_X")
+
+    assert len(ids) == 75
+    assert ids[0] == "VID0"
+    assert ids[-1] == "VID124"
 
 
 def test_listar_todos_ids_respeita_teto(monkeypatch):

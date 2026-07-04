@@ -7,6 +7,8 @@ from cadastro_jogo import adicionar_alias_jogo
 from coletor_youtube import (
     CACHE_PADRAO,
     coletar_canal,
+    coletar_detalhe_video,
+    coletar_textos_comentarios,
     coletar_video_por_id,
     coletar_videos_por_ids,
     listar_videos_recentes_do_canal,
@@ -35,7 +37,7 @@ from status_sistema import coletar_status, imprimir_status
 from relatorio_diario import gerar_relatorio_diario_markdown
 from validacao_dados import imprimir_validacao, validar_dados
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
-from modelos import VideoColetado
+from modelos import ComentariosColetados, VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
 from relatorio import (
     gerar_relatorio_csv,
@@ -56,6 +58,7 @@ from evidencias_jogo import (
     gerar_evidencias,
     resumir_evidencia_criadores,
 )
+from detector_jogo import detectar_jogo_em_conteudo
 
 
 
@@ -63,6 +66,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
 VIDEOS_CSV = DATA_DIR / "videos_coletados.csv"
 MEUS_VIDEOS_CSV = DATA_DIR / "meus_videos.csv"
+MEU_CANAL_IDS_CHECKPOINT = DATA_DIR / "meu_canal_ids_checkpoint.json"
 HISTORICO_CSV = DATA_DIR / "historico_rankings.csv"
 WATCHLIST_CSV = DATA_DIR / "watchlist_jogos.csv"
 REPORTS_DIR = BASE_DIR / "reports"
@@ -145,6 +149,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "meus_videos_sem_jogo":
         meus_videos_sem_jogo_interativo()
+        return 0
+
+    if comando == "diagnosticar_meu_video":
+        diagnosticar_meu_video_interativo(video_id)
         return 0
 
     if comando == "comparar_recomendacoes_meu_canal":
@@ -576,6 +584,9 @@ def _coletar_meu_canal_completo(
             limite_maximo,
             limite_comentarios,
             comentarios_extra_sem_jogo,
+            caminho_checkpoint=MEU_CANAL_IDS_CHECKPOINT,
+            ao_progresso_ids=_imprimir_progresso_ids,
+            ao_progresso_lote=_imprimir_progresso_lote,
         )
     except RuntimeError as erro:
         print(f"Erro: {erro}")
@@ -591,9 +602,87 @@ def _coletar_meu_canal_completo(
     print(f"Erros: {resumo['erros']}")
 
 
+# Mostra progresso da fase de listagem da playlist de uploads.
+def _imprimir_progresso_ids(pagina: int, total_ids: int) -> None:
+    print(f"Pagina de IDs {pagina}: {total_ids} video_ids acumulados.")
+
+
+# Mostra progresso da fase de detalhes/deteccao ja com salvamento parcial.
+def _imprimir_progresso_lote(lote: int, total_analisados: int) -> None:
+    print(f"Lote {lote} processado: {total_analisados} videos analisados.")
+
+
 # Lista os meus videos em que nenhum jogo foi detectado, lendo data/meus_videos.csv.
 def meus_videos_sem_jogo_interativo() -> None:
     imprimir_meus_videos_sem_jogo(listar_meus_videos_sem_jogo(MEUS_VIDEOS_CSV))
+
+
+# Diagnostica um video especifico do meu canal, mostrando quais sinais chegaram ate a
+# deteccao sem revelar chave de API nem dados pessoais de comentarios.
+def diagnosticar_meu_video_interativo(video_id: str) -> None:
+    if ler_chave_youtube() is None:
+        print(
+            "YOUTUBE_API_KEY nao definida no ambiente. "
+            "Defina a variavel antes de diagnosticar um video (veja .env.example)."
+        )
+        return
+
+    jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
+    try:
+        detalhe = coletar_detalhe_video(video_id)
+    except RuntimeError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    if detalhe is None:
+        print(f"Video nao encontrado: {video_id}")
+        return
+
+    try:
+        comentarios = coletar_textos_comentarios(video_id, 50)
+    except RuntimeError as erro:
+        print(
+            f"AVISO: video {video_id}: operacao comentarios falhou ({erro}). "
+            "O diagnostico continuara sem comentarios completos."
+        )
+        comentarios = ComentariosColetados(incompleto=True)
+
+    deteccao = detectar_jogo_em_conteudo(
+        jogos,
+        titulo=detalhe.titulo,
+        descricao=detalhe.descricao,
+        tags=detalhe.tags,
+        comentarios=comentarios.textos,
+    )
+
+    print("=== Diagnostico do Meu Video ===")
+    print(f"Video ID: {detalhe.video_id}")
+    print(f"Titulo: {detalhe.titulo}")
+    print(f"Descricao coletada: {'sim' if detalhe.descricao.strip() else 'nao'}")
+    print(f"Trecho da descricao: {_trecho(detalhe.descricao)}")
+    print(f"Tags coletadas: {len(detalhe.tags)}")
+    if detalhe.tags:
+        print(f"Tags: {', '.join(detalhe.tags)}")
+    print(
+        "Comentarios coletados: "
+        f"{comentarios.comentarios_principais} principais, {comentarios.respostas} respostas"
+    )
+    print(f"Comentarios incompletos: {'sim' if comentarios.incompleto else 'nao'}")
+    print(f"Jogo detectado: {deteccao.jogo_detectado or '(nenhum)'}")
+    print(f"Fonte da deteccao: {deteccao.fonte}")
+    print(f"Confianca: {deteccao.confianca}")
+    print(f"Motivo da nao deteccao: {deteccao.motivo_nao_detectado or '(nao se aplica)'}")
+    print(f"Nome extraido fora do seed: {'sim' if not deteccao.jogo_no_seed else 'nao'}")
+
+
+# Encurta texto longo para diagnostico de terminal.
+def _trecho(texto: str, limite: int = 180) -> str:
+    texto = " ".join((texto or "").split())
+    if not texto:
+        return "(vazio)"
+    if len(texto) <= limite:
+        return texto
+    return texto[:limite].rstrip() + "..."
 
 
 # Cruza o ranking atual com os meus videos (data/meus_videos.csv) e mostra, por jogo,
@@ -1257,6 +1346,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         "meus_videos_sem_jogo",
         help="Lista os seus videos coletados sem jogo detectado, com sugestao para corrigir.",
     )
+
+    diagnosticar_meu_video = subcomandos.add_parser(
+        "diagnosticar_meu_video",
+        help="Mostra os sinais de deteccao de um video especifico do meu canal.",
+    )
+    diagnosticar_meu_video.add_argument("video_id", help="ID do video do YouTube.")
 
     comparar_meu_canal = subcomandos.add_parser(
         "comparar_recomendacoes_meu_canal",

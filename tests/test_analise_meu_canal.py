@@ -1,6 +1,7 @@
 import io
 import json
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
@@ -10,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import coletor_youtube
+import main as main_mod
 from analise_meu_canal import analisar_canal_completo, analisar_meu_canal
 from leitor_csv import _ler_linhas
 from main import coletar_meu_canal_interativo
@@ -116,6 +118,28 @@ def test_erro_de_comentarios_nao_derruba_video(monkeypatch, tmp_path):
 
     assert resumo["analisados"] == 1
     assert resumo["erros"] == 0
+
+
+def test_timeout_de_comentarios_nao_interrompe_e_marca_incompleto(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json)
+
+    def _timeout(url, timeout=10):
+        raise TimeoutError("tempo esgotado")
+
+    monkeypatch.setattr(coletor_youtube, "urlopen", _timeout)
+    destino = tmp_path / "meus_videos.csv"
+
+    resumo = analisar_meu_canal("UC_X", _jogos(), destino, limite=1)
+
+    linhas = _ler_linhas(destino)
+    assert resumo["analisados"] == 1
+    assert resumo["erros"] == 0
+    assert linhas[0]["comentarios_incompletos"] == "sim"
+    saida = capsys.readouterr().out
+    assert "VID0" in saida
+    assert "comentarios" in saida
+    assert "continuara" in saida
 
 
 # --- CLI: ausencia de chave/canal vira mensagem clara, sem tocar a rede ---
@@ -292,3 +316,149 @@ def test_analisar_canal_completo_nao_busca_comentarios_quando_metadado_basta(mon
     assert resumo["detectados_sem_comentarios"] == 3
     assert resumo["detectados_por_comentarios"] == 0
     assert resumo["sem_jogo"] == 0
+
+
+def test_analisar_canal_completo_salva_parcial_apos_lote_com_timeout(monkeypatch, tmp_path):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+
+    def _fake_get_json_timeout_no_segundo_lote(url):
+        if "/channels" in url:
+            return {"items": [{"contentDetails": {"relatedPlaylists": {"uploads": "UU_X"}}}]}
+        if "/playlistItems" in url:
+            return {
+                "items": [
+                    {"contentDetails": {"videoId": f"VID{i}"}}
+                    for i in range(51)
+                ]
+            }
+        if "/videos" in url:
+            ids = parse_qs(urlparse(url).query)["id"][0].split(",")
+            if ids == ["VID50"]:
+                raise TimeoutError("tempo esgotado")
+            return {
+                "items": [
+                    {
+                        "id": vid,
+                        "snippet": {
+                            "title": f"video {vid}",
+                            "channelTitle": "Meu Canal",
+                            "description": "Jogo: Resident Evil",
+                            "tags": [],
+                            "publishedAt": "2026-06-10T00:00:00Z",
+                            "liveBroadcastContent": "none",
+                        },
+                        "statistics": {"viewCount": "10", "likeCount": "1", "commentCount": "0"},
+                        "contentDetails": {"duration": "PT2M"},
+                    }
+                    for vid in ids
+                ]
+            }
+        return {"items": []}
+
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json_timeout_no_segundo_lote)
+    destino = tmp_path / "meus_videos.csv"
+
+    resumo = analisar_canal_completo("UC_X", _jogos(), destino, set(), None, 0, 0)
+
+    assert resumo["encontrados"] == 51
+    assert resumo["analisados"] == 50
+    assert resumo["erros"] == 1
+    assert len(_ler_linhas(destino)) == 50
+
+
+def test_analisar_canal_completo_todos_videos_nao_para_em_20_ou_50(monkeypatch, tmp_path):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+
+    def _fake_get_json_120(url):
+        if "/channels" in url:
+            return {"items": [{"contentDetails": {"relatedPlaylists": {"uploads": "UU_X"}}}]}
+        if "/playlistItems" in url:
+            token = parse_qs(urlparse(url).query).get("pageToken", [None])[0]
+            inicio = 0 if token is None else int(token)
+            fim = min(inicio + 50, 120)
+            payload = {
+                "items": [
+                    {"contentDetails": {"videoId": f"VID{i}"}}
+                    for i in range(inicio, fim)
+                ]
+            }
+            if fim < 120:
+                payload["nextPageToken"] = str(fim)
+            return payload
+        if "/videos" in url:
+            ids = parse_qs(urlparse(url).query)["id"][0].split(",")
+            return {
+                "items": [
+                    {
+                        "id": vid,
+                        "snippet": {
+                            "title": f"video {vid}",
+                            "channelTitle": "Meu Canal",
+                            "description": "Jogo: Resident Evil",
+                            "tags": [],
+                            "publishedAt": "2026-06-10T00:00:00Z",
+                            "liveBroadcastContent": "none",
+                        },
+                        "statistics": {"viewCount": "10", "likeCount": "1", "commentCount": "0"},
+                        "contentDetails": {"duration": "PT2M"},
+                    }
+                    for vid in ids
+                ]
+            }
+        return {"items": []}
+
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json_120)
+
+    resumo = analisar_canal_completo("UC_X", _jogos(), tmp_path / "meus_videos.csv", set(), None, 0, 0)
+
+    assert resumo["encontrados"] == 120
+    assert resumo["analisados"] == 120
+
+
+def test_cli_diagnosticar_meu_video_mostra_campos_relevantes(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(main_mod, "DATA_DIR", tmp_path)
+    (tmp_path / "jogos_seed.csv").write_text(
+        "nome,aliases,genero,fit_inicial\nResident Evil,resident evil|re4,terror,8\n",
+        encoding="utf-8",
+    )
+
+    def _fake_detalhe(video_id):
+        from modelos import DetalheVideoYoutube
+
+        return DetalheVideoYoutube(
+            video_id=video_id,
+            titulo="Video diagnosticado",
+            descricao="Jogo: Dark Hours\nDescricao longa para teste.",
+            tags=["dark hours", "gameplay"],
+            url=f"https://www.youtube.com/watch?v={video_id}",
+            views=100,
+            likes=10,
+            comentarios=3,
+            data_publicacao="2026-07-01",
+            duracao_segundos=120,
+            tipo_video="longo",
+        )
+
+    def _fake_comentarios(video_id, limite=50):
+        return SimpleNamespace(
+            textos=["comentario principal", "resposta com contexto"],
+            comentarios_principais=1,
+            respostas=1,
+            incompleto=False,
+        )
+
+    monkeypatch.setattr(main_mod, "coletar_detalhe_video", _fake_detalhe, raising=False)
+    monkeypatch.setattr(main_mod, "coletar_textos_comentarios", _fake_comentarios, raising=False)
+
+    assert main_mod.main(["diagnosticar_meu_video", "VID_DIAG"]) == 0
+
+    saida = capsys.readouterr().out
+    assert "Video diagnosticado" in saida
+    assert "Descricao coletada: sim" in saida
+    assert "Tags coletadas: 2" in saida
+    assert "Jogo detectado: Dark Hours" in saida
+    assert "Fonte da deteccao: descricao" in saida
+    assert "Confianca: alta" in saida
+    assert "fora do seed" in saida
+    assert "CHAVE_FAKE" not in saida

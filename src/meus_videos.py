@@ -22,14 +22,22 @@ CAMPOS_MEU_VIDEO = [
     "data_coleta",
     "data_publicacao",
     "titulo",
+    "descricao",
+    "tags",
     "jogo_detectado",
     "confianca_jogo",
     "fonte_deteccao",
+    "motivo_nao_detectado",
+    "jogo_no_seed",
     "url",
     "views",
     "likes",
     "comentarios",
+    "comentarios_coletados",
+    "respostas_coletadas",
+    "comentarios_incompletos",
     "tipo_video",
+    "duracao_segundos",
     "score_resultado_real",
     "status_analise",
 ]
@@ -101,14 +109,22 @@ def _meu_video_para_linha(meu_video: MeuVideo, data_coleta: str) -> dict[str, st
         "data_coleta": data_coleta,
         "data_publicacao": meu_video.data_publicacao,
         "titulo": meu_video.titulo,
+        "descricao": meu_video.descricao,
+        "tags": "|".join(meu_video.tags),
         "jogo_detectado": meu_video.jogo_detectado,
         "confianca_jogo": meu_video.confianca_jogo,
         "fonte_deteccao": meu_video.fonte_deteccao,
+        "motivo_nao_detectado": meu_video.motivo_nao_detectado,
+        "jogo_no_seed": _bool_para_sim_nao(meu_video.jogo_no_seed),
         "url": meu_video.url,
         "views": int(meu_video.views),
         "likes": int(meu_video.likes),
         "comentarios": int(meu_video.comentarios),
+        "comentarios_coletados": int(meu_video.comentarios_coletados),
+        "respostas_coletadas": int(meu_video.respostas_coletadas),
+        "comentarios_incompletos": _bool_para_sim_nao(meu_video.comentarios_incompletos),
         "tipo_video": meu_video.tipo_video,
+        "duracao_segundos": int(meu_video.duracao_segundos),
         "score_resultado_real": calcular_score_resultado_real(meu_video),
         "status_analise": meu_video.status_analise,
     }
@@ -118,7 +134,9 @@ def _meu_video_para_linha(meu_video: MeuVideo, data_coleta: str) -> dict[str, st
 # reescrever tudo e simples e seguro inclusive para o caso de atualizacao de uma linha.
 def _reescrever_csv(caminho: Path, linhas: list[dict]) -> None:
     with caminho.open("w", encoding="utf-8", newline="") as arquivo:
-        escritor = csv.DictWriter(arquivo, fieldnames=CAMPOS_MEU_VIDEO)
+        escritor = csv.DictWriter(
+            arquivo, fieldnames=CAMPOS_MEU_VIDEO, extrasaction="ignore"
+        )
         escritor.writeheader()
         escritor.writerows(linhas)
 
@@ -144,7 +162,29 @@ def _linha_para_meu_video(linha: dict[str, str]) -> MeuVideo:
         comentarios=_para_int(linha.get("comentarios"), 0),
         tipo_video=linha.get("tipo_video", "").strip() or "desconhecido",
         status_analise=linha.get("status_analise", "").strip() or "pendente",
+        descricao=linha.get("descricao", "").strip(),
+        tags=_separar_tags(linha.get("tags", "")),
+        duracao_segundos=_para_int(linha.get("duracao_segundos"), 0),
+        motivo_nao_detectado=linha.get("motivo_nao_detectado", "").strip(),
+        jogo_no_seed=_para_bool(linha.get("jogo_no_seed"), True),
+        comentarios_incompletos=_para_bool(linha.get("comentarios_incompletos"), False),
+        comentarios_coletados=_para_int(linha.get("comentarios_coletados"), 0),
+        respostas_coletadas=_para_int(linha.get("respostas_coletadas"), 0),
     )
+
+
+def _separar_tags(valor: str | None) -> list[str]:
+    return [tag.strip() for tag in (valor or "").split("|") if tag.strip()]
+
+
+def _bool_para_sim_nao(valor: bool) -> str:
+    return "sim" if valor else "nao"
+
+
+def _para_bool(valor: str | None, padrao: bool) -> bool:
+    if valor is None or not valor.strip():
+        return padrao
+    return valor.strip().casefold() in {"sim", "s", "true", "1", "yes"}
 
 
 # Retorna os meus videos sem jogo detectado (jogo_detectado vazio), ordenados por views
