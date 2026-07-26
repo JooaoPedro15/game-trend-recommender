@@ -92,6 +92,43 @@ def salvar_meu_video(
     return "criado"
 
 
+# Le o cabecalho gravado no arquivo (lista vazia se ele nao existe ou esta vazio).
+def _cabecalho_do_csv(caminho: Path) -> list[str]:
+    if not caminho.exists() or caminho.stat().st_size == 0:
+        return []
+
+    with caminho.open("r", encoding="utf-8-sig", newline="") as arquivo:
+        return next(csv.reader(arquivo), [])
+
+
+# Colunas de CAMPOS_MEU_VIDEO que faltam no arquivo gravado. O CSV nasceu com menos
+# colunas nas primeiras sprints, e o csv.DictReader simplesmente NAO devolve a chave de
+# uma coluna ausente — os leitores caem no padrao ("" ou 0) sem ninguem perceber. Ou seja:
+# um video coletado antes da coluna existir fica indistinguivel de um video que de fato
+# nao tem descricao. Esta funcao torna essa diferenca visivel.
+def colunas_faltando(caminho: str | Path) -> list[str]:
+    cabecalho = _cabecalho_do_csv(Path(caminho))
+    if not cabecalho:
+        return []
+
+    return [campo for campo in CAMPOS_MEU_VIDEO if campo not in cabecalho]
+
+
+# Reescreve o CSV com o cabecalho atual, preservando os dados existentes e deixando as
+# colunas novas vazias. Devolve as colunas acrescentadas ([] quando ja estava em dia).
+# Nao inventa dado nenhum: descricao e tags continuam vazias ate uma nova coleta buscar
+# esses campos na API. A migracao so devolve a capacidade de distinguir "nao coletado"
+# de "nao existe" — quem preenche de verdade e o coletar_meu_canal.
+def migrar_meus_videos(caminho: str | Path) -> list[str]:
+    caminho = Path(caminho)
+    faltando = colunas_faltando(caminho)
+    if not faltando:
+        return []
+
+    _reescrever_csv(caminho, _ler_linhas(caminho))
+    return faltando
+
+
 # Garante que o CSV existe com o cabecalho (mesmo padrao do cadastro_video).
 def _garantir_csv(caminho: Path) -> None:
     caminho.parent.mkdir(parents=True, exist_ok=True)

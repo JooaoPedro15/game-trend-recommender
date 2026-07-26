@@ -142,3 +142,77 @@ def test_env_ausente_vira_info():
     assert "YOUTUBE_API_KEY" in mensagens
     assert "MEU_CANAL_YOUTUBE_ID" in mensagens
     assert all(p.severidade == "info" for p in problemas if "configurad" in p.mensagem)
+
+
+# --- Meus videos sem jogo detectado: a calibracao inteira depende disso ---
+#
+# Regressao: com 26 videos e nenhum jogo detectado, a validacao respondia
+# "Nenhum problema encontrado" porque so olhava views zeradas.
+
+def _meu_video(video_id="V1", jogo="Lethal Company", views=1000, jogo_no_seed=True):
+    return MeuVideo(
+        video_id=video_id,
+        titulo="titulo",
+        url=f"https://y/{video_id}",
+        data_publicacao="2026-05-01",
+        jogo_detectado=jogo,
+        confianca_jogo="alta",
+        fonte_deteccao="titulo",
+        views=views,
+        likes=10,
+        comentarios=2,
+        jogo_no_seed=jogo_no_seed,
+    )
+
+
+def _validar(meus_videos, colunas_faltando=None):
+    return validar_dados(
+        [_video()],
+        [_jogo()],
+        [_canal()],
+        meus_videos,
+        chave_configurada=True,
+        canal_configurado=True,
+        colunas_faltando_meus_videos=colunas_faltando,
+    )
+
+
+def test_todos_meus_videos_sem_jogo_e_critico():
+    problemas = _validar([_meu_video(jogo=""), _meu_video("V2", jogo="")])
+
+    assert "critico" in _severidades(problemas)
+    assert "Nenhum dos 2 video(s) do meu canal tem jogo detectado" in _mensagens(problemas)
+
+
+def test_parte_dos_meus_videos_sem_jogo_e_aviso():
+    problemas = _validar([_meu_video(), _meu_video("V2", jogo="")])
+
+    assert "critico" not in _severidades(problemas)
+    assert "1 de 2 video(s) do meu canal sem jogo detectado" in _mensagens(problemas)
+
+
+def test_todos_meus_videos_com_jogo_nao_gera_problema():
+    problemas = _validar([_meu_video(), _meu_video("V2")])
+
+    assert "sem jogo detectado" not in _mensagens(problemas)
+
+
+def test_jogo_detectado_fora_do_seed_vira_aviso():
+    problemas = _validar([_meu_video(jogo="Peak", jogo_no_seed=False)])
+
+    assert "nao esta no" in _mensagens(problemas)
+
+
+# --- Schema antigo do CSV: colunas ausentes viram aviso, nao silencio ---
+
+def test_colunas_faltando_viram_aviso():
+    problemas = _validar([_meu_video()], colunas_faltando=["descricao", "tags"])
+
+    assert "aviso" in _severidades(problemas)
+    assert "descricao, tags" in _mensagens(problemas)
+
+
+def test_sem_colunas_faltando_nao_reclama_do_formato():
+    problemas = _validar([_meu_video()], colunas_faltando=[])
+
+    assert "coluna(s) do formato atual" not in _mensagens(problemas)

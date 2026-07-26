@@ -25,9 +25,11 @@ from config import (
     obter_youtube_api_key,
 )
 from meus_videos import (
+    colunas_faltando,
     imprimir_meus_videos_sem_jogo,
     ler_meus_videos,
     listar_meus_videos_sem_jogo,
+    migrar_meus_videos,
 )
 from relatorio_meu_canal import gerar_relatorio_meu_canal_markdown
 from repetir_jogos import imprimir_jogos_para_repetir, jogos_para_repetir
@@ -541,6 +543,7 @@ def coletar_meu_canal_interativo(
         )
         return
 
+    _migrar_meus_videos_se_preciso()
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
 
     if todos_videos:
@@ -564,6 +567,19 @@ def coletar_meu_canal_interativo(
     print(f"Videos novos: {resumo['novos']}")
     print(f"Videos atualizados: {resumo['atualizados']}")
     print(f"Erros: {resumo['erros']}")
+
+
+# Atualiza o cabecalho do meus_videos.csv quando ele veio de uma versao antiga do projeto,
+# antes de coletar. Fica em silencio quando o arquivo ja esta em dia. Roda aqui, e nao no
+# salvar_meu_video, para acontecer UMA vez por coleta (e nao uma vez por video) e para o
+# usuario ver que o arquivo mudou de formato.
+def _migrar_meus_videos_se_preciso() -> None:
+    novas_colunas = migrar_meus_videos(MEUS_VIDEOS_CSV)
+    if novas_colunas:
+        print(
+            f"Formato do meus_videos.csv atualizado: {len(novas_colunas)} coluna(s) nova(s) "
+            f"({', '.join(novas_colunas)}). Os dados antigos foram preservados."
+        )
 
 
 # Roda a coleta completa (--todos-videos) e mostra o progresso. limite (se dado) e o teto.
@@ -738,6 +754,7 @@ def validar_dados_interativo() -> None:
         meus_videos,
         chave_configurada=ler_chave_youtube() is not None,
         canal_configurado=ler_id_canal_proprio() is not None,
+        colunas_faltando_meus_videos=colunas_faltando(MEUS_VIDEOS_CSV),
     )
     imprimir_validacao(problemas)
 
@@ -819,6 +836,7 @@ def _rotina_coletar_meu_canal(
         )
         return None
 
+    _migrar_meus_videos_se_preciso()
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     try:
         resumo = analisar_meu_canal(

@@ -32,12 +32,13 @@ def validar_dados(
     meus_videos: list[MeuVideo],
     chave_configurada: bool,
     canal_configurado: bool,
+    colunas_faltando_meus_videos: list[str] | None = None,
 ) -> list[Problema]:
     problemas: list[Problema] = []
     _validar_jogos(problemas, jogos)
     _validar_videos(problemas, videos, jogos)
     _validar_canais(problemas, canais)
-    _validar_meus_videos(problemas, meus_videos)
+    _validar_meus_videos(problemas, meus_videos, colunas_faltando_meus_videos or [])
     _validar_config(problemas, chave_configurada, canal_configurado)
     return problemas
 
@@ -168,9 +169,64 @@ def _validar_canais(problemas: list[Problema], canais: list[CanalReferencia]) ->
         )
 
 
-def _validar_meus_videos(problemas: list[Problema], meus_videos: list[MeuVideo]) -> None:
+def _validar_meus_videos(
+    problemas: list[Problema],
+    meus_videos: list[MeuVideo],
+    colunas_faltando: list[str],
+) -> None:
+    if colunas_faltando:
+        problemas.append(
+            Problema(
+                "aviso",
+                f"meus_videos.csv esta sem {len(colunas_faltando)} coluna(s) do formato "
+                f"atual: {', '.join(colunas_faltando)}.",
+                "Rode coletar_meu_canal para atualizar o arquivo; sem descricao e tags a "
+                "deteccao so enxerga o titulo.",
+            )
+        )
+
     if not meus_videos:
         return
+
+    # Sem jogo detectado, o video existe mas nao ensina nada: fit real, jogos_para_repetir,
+    # jogos_que_nao_funcionaram e o ajuste do ranking dependem todos do jogo_detectado.
+    # Por isso 100% sem deteccao e critico, nao aviso — a calibracao inteira fica desligada
+    # e, sem esta checagem, o comando terminava dizendo "nenhum problema encontrado".
+    sem_jogo = [video for video in meus_videos if not video.jogo_detectado.strip()]
+    if len(sem_jogo) == len(meus_videos):
+        problemas.append(
+            Problema(
+                "critico",
+                f"Nenhum dos {len(meus_videos)} video(s) do meu canal tem jogo detectado "
+                "(fit real e toda a calibracao pelo canal ficam desligados).",
+                "Rode meus_videos_sem_jogo e diagnosticar_meu_video <id> para ver o que "
+                'falta; marque "Jogo: Nome" na descricao ou cadastre aliases.',
+            )
+        )
+    elif sem_jogo:
+        problemas.append(
+            Problema(
+                "aviso",
+                f"{len(sem_jogo)} de {len(meus_videos)} video(s) do meu canal sem jogo "
+                "detectado.",
+                "Rode meus_videos_sem_jogo; cada video sem jogo e um resultado real perdido.",
+            )
+        )
+
+    fora_do_seed = [
+        video
+        for video in meus_videos
+        if video.jogo_detectado.strip() and not video.jogo_no_seed
+    ]
+    if fora_do_seed:
+        problemas.append(
+            Problema(
+                "aviso",
+                f"{len(fora_do_seed)} video(s) com jogo detectado que nao esta no "
+                "jogos_seed.csv.",
+                "Cadastre esses jogos em data/jogos_seed.csv para eles entrarem no ranking.",
+            )
+        )
 
     sem_resultado = [video for video in meus_videos if calcular_score_resultado_real(video) <= 0]
     if sem_resultado:
