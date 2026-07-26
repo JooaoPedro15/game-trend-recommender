@@ -1,8 +1,9 @@
 import io
 import json
+import socket
 import sys
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -633,3 +634,86 @@ def test_coletar_detalhes_em_lote_vazio_nao_chama_api(monkeypatch):
     monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
 
     assert coletar_detalhes_em_lote([]) == []
+
+
+# --- Falha de rede (nao-HTTP) vira RuntimeError, nunca URLError cru ---
+#
+# URLError e irmao do HTTPError na hierarquia do urllib e NAO e RuntimeError. Antes ele
+# escapava ate o terminal como stack trace, porque os comandos do main.py so capturam
+# RuntimeError. Estes testes travam os dois lados do contrato: falha permanente vira
+# RuntimeError na hora, e timeout continua sendo retentado antes de desistir.
+
+def _urlopen_que_falha(erro):
+    def _falhar(url, timeout=10):
+        raise erro
+
+    return _falhar
+
+
+def test_conexao_recusada_vira_runtime_error(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(
+        coletor_youtube,
+        "urlopen",
+        _urlopen_que_falha(URLError(ConnectionRefusedError("conexao recusada"))),
+    )
+
+    with pytest.raises(RuntimeError, match="Falha de rede"):
+        coletar_video_por_id("VID123")
+
+
+def test_timeout_no_video_e_retentado_e_vira_runtime_error(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    tentativas = []
+
+    def _timeout(url, timeout=10):
+        tentativas.append(url)
+        raise URLError(socket.timeout("timed out"))
+
+    monkeypatch.setattr(coletor_youtube, "urlopen", _timeout)
+
+    with pytest.raises(RuntimeError, match="Timeout"):
+        coletar_video_por_id("VID123")
+
+    assert len(tentativas) == 3
+
+
+def test_falha_de_rede_no_lote_e_contada_como_erro(monkeypatch, tmp_path):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(
+        coletor_youtube,
+        "urlopen",
+        _urlopen_que_falha(URLError(ConnectionRefusedError("conexao recusada"))),
+    )
+    arquivo = tmp_path / "ids.txt"
+    arquivo.write_text("VID1\nVID2\n", encoding="utf-8")
+
+    resumo = coletar_videos_por_ids(arquivo, tmp_path / "videos.csv", None)
+
+    assert resumo["lidos"] == 2
+    assert resumo["erros"] == 2
+    assert resumo["salvos"] == 0
+
+
+def test_falha_de_rede_ao_listar_canal_vira_runtime_error(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(
+        coletor_youtube,
+        "urlopen",
+        _urlopen_que_falha(URLError(ConnectionRefusedError("conexao recusada"))),
+    )
+
+    with pytest.raises(RuntimeError, match="Falha de rede"):
+        obter_playlist_uploads("UC_X")
+
+
+def test_falha_de_rede_nos_comentarios_vira_runtime_error(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(
+        coletor_youtube,
+        "urlopen",
+        _urlopen_que_falha(URLError(ConnectionRefusedError("conexao recusada"))),
+    )
+
+    with pytest.raises(RuntimeError, match="Falha de rede"):
+        coletar_comentarios("VID123")

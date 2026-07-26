@@ -1145,15 +1145,28 @@ def _perguntar_tipo_video() -> str:
     return valor or "desconhecido"
 
 
-# Valida o argumento --top: precisa ser um inteiro positivo.
-def _top_valido(valor: str) -> int:
-    try:
-        numero = int(valor)
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"valor invalido para --top: {valor}")
-    if numero <= 0:
-        raise argparse.ArgumentTypeError(f"--top deve ser um inteiro positivo: {valor}")
-    return numero
+# Fabrica um validador de inteiro para o `type=` do argparse. Precisa ser uma fabrica
+# porque o argparse so entrega o VALOR para a funcao de validacao — o nome da flag e o
+# minimo ficam guardados no fechamento, para cada flag errar com a sua propria mensagem.
+# minimo=1 e o caso comum (quantidade precisa ser positiva); minimo=0 e para as flags
+# em que zero significa "desligado", como --comentarios-extra-sem-jogo.
+def _inteiro(nome_flag: str, minimo: int = 1):
+    def _validar(valor: str) -> int:
+        try:
+            numero = int(valor)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"valor invalido para {nome_flag}: {valor}")
+        if numero < minimo:
+            raise argparse.ArgumentTypeError(
+                f"{nome_flag} deve ser um inteiro maior ou igual a {minimo}: {valor}"
+            )
+        return numero
+
+    return _validar
+
+
+# Validador do --top (inteiro positivo), mantido com nome proprio por ser o mais usado.
+_top_valido = _inteiro("--top")
 
 
 # Valida o argumento --desde: precisa estar no formato YYYY-MM-DD.
@@ -1288,7 +1301,7 @@ def _construir_parser() -> argparse.ArgumentParser:
     canal.add_argument("channel_id", help="ID do canal do YouTube (ex: UC...).")
     canal.add_argument(
         "--limite",
-        type=_top_valido,
+        type=_inteiro("--limite"),
         default=5,
         help="Quantos videos recentes coletar (padrao: 5).",
     )
@@ -1299,7 +1312,7 @@ def _construir_parser() -> argparse.ArgumentParser:
     )
     meus_videos.add_argument(
         "--limite",
-        type=_top_valido,
+        type=_inteiro("--limite"),
         default=10,
         help="Quantos videos recentes listar (padrao: 10).",
     )
@@ -1310,7 +1323,7 @@ def _construir_parser() -> argparse.ArgumentParser:
     )
     meu_canal.add_argument(
         "--limite",
-        type=_top_valido,
+        type=_inteiro("--limite"),
         default=None,
         help="Sem --todos-videos: quantos recentes analisar (padrao: 5). Com --todos-videos: teto opcional.",
     )
@@ -1321,13 +1334,13 @@ def _construir_parser() -> argparse.ArgumentParser:
     )
     meu_canal.add_argument(
         "--comentarios",
-        type=_top_valido,
+        type=_inteiro("--comentarios"),
         default=20,
         help="Comentarios por video, so onde o jogo nao foi detectado por titulo/descricao/tags (padrao: 20).",
     )
     meu_canal.add_argument(
         "--comentarios-extra-sem-jogo",
-        type=_top_valido,
+        type=_inteiro("--comentarios-extra-sem-jogo", minimo=0),
         default=0,
         help="Comentarios extra so nos videos que continuarem sem jogo (0 = desligado).",
     )
@@ -1392,13 +1405,13 @@ def _construir_parser() -> argparse.ArgumentParser:
     _adicionar_filtros(rotina)
     rotina.add_argument(
         "--limite",
-        type=_top_valido,
+        type=_inteiro("--limite"),
         default=5,
         help="Quantos videos do meu canal coletar (padrao: 5).",
     )
     rotina.add_argument(
         "--comentarios",
-        type=_top_valido,
+        type=_inteiro("--comentarios"),
         default=20,
         help="Quantos comentarios por video puxar na coleta (padrao: 20).",
     )

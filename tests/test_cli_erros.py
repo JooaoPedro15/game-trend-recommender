@@ -72,3 +72,36 @@ def test_parser_comando_desconhecido_mostra_mensagem_clara(capsys):
     assert excinfo.value.code == 2
     erro = capsys.readouterr().err
     assert "invalid choice" in erro
+
+
+# --- Cada flag erra com o SEU nome (o validador vinha fixo em "--top") ---
+
+def test_erro_de_limite_cita_a_flag_limite(capsys):
+    parser = _construir_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["coletar_canal_youtube", "UC_X", "--limite", "0"])
+    erro = capsys.readouterr().err
+    assert "--limite" in erro
+    assert "--top" not in erro
+
+
+# --- 0 desliga a coleta extra de comentarios (o help sempre prometeu isso) ---
+
+def test_comentarios_extra_sem_jogo_aceita_zero():
+    parser = _construir_parser()
+    args = parser.parse_args(["coletar_meu_canal", "--comentarios-extra-sem-jogo", "0"])
+    assert args.comentarios_extra_sem_jogo == 0
+
+
+def test_comentarios_extra_sem_jogo_rejeita_negativo(capsys):
+    parser = _construir_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["coletar_meu_canal", "--comentarios-extra-sem-jogo", "-1"])
+    assert "--comentarios-extra-sem-jogo" in capsys.readouterr().err
+
+
+def test_comentarios_continua_exigindo_positivo(capsys):
+    parser = _construir_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["coletar_meu_canal", "--comentarios", "0"])
+    assert "--comentarios" in capsys.readouterr().err

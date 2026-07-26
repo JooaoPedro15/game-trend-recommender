@@ -38,7 +38,11 @@ def _exigir_chave() -> str:
     return chave
 
 
-# Faz um GET na API e devolve o JSON; converte erro HTTP em RuntimeError claro.
+# Faz um GET na API e devolve o JSON, convertendo falha de rede em RuntimeError claro.
+# Sao dois casos diferentes de URLError: timeout sobe CRU de proposito, porque quem chama
+# envolve isso em _com_retentativas_timeout e so consegue reconhecer o timeout no erro
+# original; qualquer outra falha (DNS, conexao recusada, cabo na tomada) nao melhora com
+# retentativa e ja vira RuntimeError aqui, que e o que os comandos do main.py capturam.
 def _get_json(url: str) -> dict:
     try:
         with urlopen(url, timeout=10) as resposta:
@@ -46,6 +50,13 @@ def _get_json(url: str) -> dict:
     except HTTPError as erro:
         raise RuntimeError(
             f"Erro na YouTube Data API (HTTP {erro.code}). Verifique a chave e a quota."
+        ) from erro
+    except URLError as erro:
+        if _eh_timeout(erro):
+            raise
+        raise RuntimeError(
+            f"Falha de rede ao chamar a YouTube Data API ({erro.reason}). "
+            "Verifique a conexao e tente de novo."
         ) from erro
 
 
@@ -88,7 +99,8 @@ def coletar_video_por_id(
 
     chave = _exigir_chave()
     parametros = urlencode({"part": "snippet,statistics", "id": video_id, "key": chave})
-    dados = _get_json(f"{API_VIDEOS_URL}?{parametros}")
+    url = f"{API_VIDEOS_URL}?{parametros}"
+    dados = _com_retentativas_timeout(lambda: _get_json(url), "video", video_id)
 
     itens = dados.get("items", [])
     if not itens:
@@ -220,7 +232,9 @@ def coletar_detalhes_em_lote_varios(
 def obter_playlist_uploads(channel_id: str) -> str | None:
     chave = _exigir_chave()
     parametros = urlencode({"part": "contentDetails", "id": channel_id, "key": chave})
-    itens = _get_json(f"{API_CHANNELS_URL}?{parametros}").get("items", [])
+    url = f"{API_CHANNELS_URL}?{parametros}"
+    dados = _com_retentativas_timeout(lambda: _get_json(url), "canal")
+    itens = dados.get("items", [])
     if not itens:
         return None
     return itens[0]["contentDetails"]["relatedPlaylists"]["uploads"]
@@ -236,8 +250,9 @@ def listar_ids_recentes_do_canal(channel_id: str, limite: int = 5) -> list[str]:
     parametros = urlencode(
         {"part": "contentDetails", "playlistId": playlist, "maxResults": limite, "key": chave}
     )
-    itens = _get_json(f"{API_PLAYLIST_ITEMS_URL}?{parametros}").get("items", [])
-    return [item["contentDetails"]["videoId"] for item in itens]
+    url = f"{API_PLAYLIST_ITEMS_URL}?{parametros}"
+    dados = _com_retentativas_timeout(lambda: _get_json(url), "lista de videos do canal")
+    return [item["contentDetails"]["videoId"] for item in dados.get("items", [])]
 
 
 # Lista TODOS os video_ids do canal, paginando a uploads playlist (50 por pagina, 1 unidade
@@ -265,7 +280,10 @@ def listar_todos_ids_do_canal(
         }
         if pagina:
             parametros["pageToken"] = pagina
-        dados = _get_json(f"{API_PLAYLIST_ITEMS_URL}?{urlencode(parametros)}")
+        url = f"{API_PLAYLIST_ITEMS_URL}?{urlencode(parametros)}"
+        dados = _com_retentativas_timeout(
+            lambda: _get_json(url), f"pagina {numero_pagina + 1} de ids do canal"
+        )
         numero_pagina += 1
 
         for item in dados.get("items", []):
@@ -300,13 +318,14 @@ def listar_videos_recentes_do_canal(channel_id: str, limite: int = 10) -> list[d
             "key": chave,
         }
     )
-    itens = _get_json(f"{API_PLAYLIST_ITEMS_URL}?{parametros}").get("items", [])
+    url = f"{API_PLAYLIST_ITEMS_URL}?{parametros}"
+    dados = _com_retentativas_timeout(lambda: _get_json(url), "lista de videos do canal")
     return [
         {
             "video_id": item.get("contentDetails", {}).get("videoId", ""),
             "titulo": item.get("snippet", {}).get("title", ""),
         }
-        for item in itens
+        for item in dados.get("items", [])
     ]
 
 
@@ -398,13 +417,24 @@ def _comentarios_desativados(erro: HTTPError) -> bool:
 
 
 # Le JSON de um endpoint de comentarios preservando o corpo de HTTPError para detectar
-# comentarios desativados, mas aplicando retry para timeout.
+# comentarios desativados, mas aplicando retry para timeout. Falha de rede que nao seja
+# HTTP vira RuntimeError, igual ao _get_json: sem isso um URLError cru subiria ate o
+# terminal como stack trace. O `except HTTPError` vem ANTES do `except URLError` porque
+# HTTPError e subclasse de URLError — invertendo a ordem, o corpo do erro se perderia.
 def _get_json_comentarios(url: str, operacao: str, video_id: str) -> dict:
-    return _com_retentativas_timeout(
-        _ler_json_comentarios(url),
-        operacao,
-        video_id,
-    )
+    try:
+        return _com_retentativas_timeout(
+            _ler_json_comentarios(url),
+            operacao,
+            video_id,
+        )
+    except HTTPError:
+        raise
+    except URLError as erro:
+        raise RuntimeError(
+            f"Falha de rede ao buscar {operacao} do video {video_id} ({erro.reason}). "
+            "Verifique a conexao e tente de novo."
+        ) from erro
 
 
 # Monta uma funcao leitora para que o retry possa reabrir a URL a cada tentativa.
