@@ -38,7 +38,7 @@ def validar_dados(
     _validar_jogos(problemas, jogos)
     _validar_videos(problemas, videos, jogos)
     _validar_canais(problemas, canais)
-    _validar_meus_videos(problemas, meus_videos, colunas_faltando_meus_videos or [])
+    _validar_meus_videos(problemas, meus_videos, colunas_faltando_meus_videos or [], jogos)
     _validar_config(problemas, chave_configurada, canal_configurado)
     return problemas
 
@@ -173,6 +173,7 @@ def _validar_meus_videos(
     problemas: list[Problema],
     meus_videos: list[MeuVideo],
     colunas_faltando: list[str],
+    jogos: list[JogoSeed],
 ) -> None:
     if colunas_faltando:
         problemas.append(
@@ -234,10 +235,21 @@ def _validar_meus_videos(
             )
         )
 
+    # A coluna jogo_no_seed e uma fotografia do momento da coleta: cadastrar o jogo depois
+    # nao reescreve as linhas antigas, entao confiar nela deixaria o aviso preso para sempre.
+    # A fonte da verdade e o proprio seed — e vale comparar tambem com os aliases, que e
+    # como a deteccao reconhece o jogo.
+    termos_do_seed = {
+        termo.strip().casefold()
+        for jogo in jogos
+        for termo in [jogo.nome, *jogo.aliases]
+        if termo.strip()
+    }
     fora_do_seed = [
         video
         for video in meus_videos
-        if video.jogo_detectado.strip() and not video.jogo_no_seed
+        if video.jogo_detectado.strip()
+        and video.jogo_detectado.strip().casefold() not in termos_do_seed
     ]
     if fora_do_seed:
         problemas.append(

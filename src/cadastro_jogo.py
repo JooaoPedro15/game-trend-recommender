@@ -11,6 +11,64 @@ class JogoNaoEncontradoError(ValueError):
     pass
 
 
+class JogoDuplicadoError(ValueError):
+    pass
+
+
+# Cadastra um jogo novo no jogos_seed.csv. Sem isto so existia adicionar_alias, que exige
+# o jogo ja existir — nao havia como criar o primeiro registro. Importa porque a deteccao
+# so percorre o seed: jogo ausente dali e invisivel para o sistema inteiro, por mais que
+# apareca na descricao dos videos. Recusa nome ou alias que ja seja termo de outro jogo,
+# senao o mesmo texto apontaria para dois jogos e a deteccao viraria loteria.
+def adicionar_jogo_seed(
+    caminho: str | Path,
+    nome: str,
+    aliases: list[str] | None = None,
+    genero: str = "",
+    fit_inicial: float = 5.0,
+) -> None:
+    caminho = Path(caminho)
+    nome = nome.strip()
+    if not nome:
+        raise ValueError("O nome do jogo nao pode ser vazio.")
+
+    # O proprio nome vira alias quando nenhum e informado: sem termo nenhum o jogo entra
+    # no seed mas continua indetectavel, que e exatamente o problema que queremos resolver.
+    # Em minusculas para seguir a convencao do arquivo (a deteccao normaliza de qualquer
+    # jeito, mas o CSV e lido por gente). Alias digitado pelo usuario fica como veio.
+    aliases = [alias.strip() for alias in (aliases or []) if alias.strip()] or [nome.lower()]
+
+    linhas = _ler_linhas(caminho)
+    termos_existentes = _termos_existentes(linhas)
+    for termo in [nome, *aliases]:
+        if termo.casefold() in termos_existentes:
+            raise JogoDuplicadoError(
+                f"O termo '{termo}' ja pertence a um jogo do jogos_seed.csv."
+            )
+
+    linhas.append(
+        {
+            "nome": nome,
+            "aliases": "|".join(aliases),
+            "genero": genero.strip(),
+            "fit_inicial": str(fit_inicial),
+        }
+    )
+    _escrever_jogos(caminho, linhas)
+
+
+# Todos os termos (nome + aliases) ja usados no seed, em casefold, para detectar colisao.
+def _termos_existentes(linhas: list[dict[str, str]]) -> set[str]:
+    termos = set()
+    for linha in linhas:
+        nome = linha.get("nome", "").strip()
+        if nome:
+            termos.add(nome.casefold())
+        for alias in _separar_aliases(linha.get("aliases", "")):
+            termos.add(alias.casefold())
+    return termos
+
+
 # Adiciona um alias a um jogo existente no CSV, preservando os demais dados.
 # Retorna True se adicionou, False se o alias ja existia; levanta JogoNaoEncontradoError se o jogo nao existe.
 def adicionar_alias_jogo(caminho: str | Path, nome_jogo: str, novo_alias: str) -> bool:

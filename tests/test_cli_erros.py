@@ -9,7 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from main import _construir_parser, _data_valida, _top_valido
+from main import _construir_parser, _data_valida, _fit_valido, _top_valido
 
 
 # --- --top: apenas inteiros positivos ---
@@ -105,3 +105,36 @@ def test_comentarios_continua_exigindo_positivo(capsys):
     with pytest.raises(SystemExit):
         parser.parse_args(["coletar_meu_canal", "--comentarios", "0"])
     assert "--comentarios" in capsys.readouterr().err
+
+
+# --- adicionar_jogo: cadastro do jogo novo no seed ---
+
+def test_parser_aceita_adicionar_jogo_com_opcionais():
+    args = _construir_parser().parse_args(
+        ["adicionar_jogo", "Lava and Aqua", "--aliases", "lava|aqua", "--genero", "puzzle", "--fit", "6"]
+    )
+
+    assert args.comando == "adicionar_jogo"
+    assert args.nome == "Lava and Aqua"
+    assert args.aliases == "lava|aqua"
+    assert args.genero == "puzzle"
+    assert args.fit == 6.0
+
+
+def test_parser_adicionar_jogo_usa_padroes():
+    args = _construir_parser().parse_args(["adicionar_jogo", "Apple Worm"])
+
+    assert args.aliases == ""
+    assert args.fit == 5.0
+
+
+def test_fit_valido_aceita_faixa_de_zero_a_dez():
+    assert _fit_valido("0") == 0.0
+    assert _fit_valido("10") == 10.0
+    assert _fit_valido("7.5") == 7.5
+
+
+def test_fit_valido_rejeita_fora_da_faixa_e_nao_numero():
+    for valor in ["-1", "10.1", "abc", ""]:
+        with pytest.raises(argparse.ArgumentTypeError):
+            _fit_valido(valor)

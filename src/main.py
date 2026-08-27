@@ -3,7 +3,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv, importar_videos_csv
-from cadastro_jogo import adicionar_alias_jogo
+from cadastro_jogo import adicionar_alias_jogo, adicionar_jogo_seed
 from coletor_youtube import (
     CACHE_PADRAO,
     coletar_canal,
@@ -87,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
     origem = getattr(args, "origem", None)
     nome = getattr(args, "nome", None)
     alias = getattr(args, "alias", None)
+    aliases = getattr(args, "aliases", "")
+    genero = getattr(args, "genero", "")
+    fit = getattr(args, "fit", 5.0)
     video_id = getattr(args, "video_id", None)
     arquivo_ids = getattr(args, "arquivo_ids", None)
     channel_id = getattr(args, "channel_id", None)
@@ -122,6 +125,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "videos_sem_jogo":
         videos_sem_jogo_interativo()
+        return 0
+
+    if comando == "adicionar_jogo":
+        adicionar_jogo_interativo(nome, aliases, genero, fit)
         return 0
 
     if comando == "adicionar_alias":
@@ -387,6 +394,28 @@ def videos_sem_jogo_interativo() -> None:
     videos = ler_videos_coletados(VIDEOS_CSV)
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     imprimir_videos_sem_jogo(encontrar_videos_sem_jogo(videos, jogos))
+
+
+# Cadastra um jogo novo no jogos_seed.csv e informa o resultado. Os aliases chegam da CLI
+# no mesmo formato do arquivo (separados por |), para quem edita o CSV na mao e quem usa o
+# comando escreverem a mesma coisa.
+def adicionar_jogo_interativo(
+    nome_jogo: str, aliases: str, genero: str, fit_inicial: float
+) -> None:
+    lista_aliases = [alias.strip() for alias in (aliases or "").split("|") if alias.strip()]
+    try:
+        adicionar_jogo_seed(
+            DATA_DIR / "jogos_seed.csv", nome_jogo, lista_aliases, genero, fit_inicial
+        )
+    except ValueError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    print(f"Jogo '{nome_jogo}' cadastrado no jogos_seed.csv (fit inicial {fit_inicial}).")
+    print(
+        "A deteccao passa a reconhecer esse jogo nos videos de referencia e nos seus. "
+        "Rode validar_dados para conferir."
+    )
 
 
 # Adiciona um alias a um jogo do jogos_seed.csv e informa o resultado.
@@ -1199,6 +1228,19 @@ def _perguntar_tipo_video() -> str:
 # minimo ficam guardados no fechamento, para cada flag errar com a sua propria mensagem.
 # minimo=1 e o caso comum (quantidade precisa ser positiva); minimo=0 e para as flags
 # em que zero significa "desligado", como --comentarios-extra-sem-jogo.
+# --fit e o palpite a priori de encaixe do jogo no canal, na escala 0-10 do jogos_seed.csv
+# (o ranker multiplica por 10). Fora da faixa nao quebra nada — o ranker limita — mas vira
+# um numero mentiroso no arquivo, entao e melhor recusar na entrada.
+def _fit_valido(valor: str) -> float:
+    try:
+        numero = float(valor)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"valor invalido para --fit: {valor}")
+    if not 0.0 <= numero <= 10.0:
+        raise argparse.ArgumentTypeError(f"--fit deve ficar entre 0 e 10: {valor}")
+    return numero
+
+
 def _inteiro(nome_flag: str, minimo: int = 1):
     def _validar(valor: str) -> int:
         try:
@@ -1259,8 +1301,8 @@ Categorias de comandos:
   Relatorios:     relatorio_diario, relatorio_meu_canal, relatorio_calibracao
   Monitoramento:  salvar_snapshot_ranking, comparar_rankings, ranking_watchlist,
                   adicionar_watchlist, listar_watchlist, remover_watchlist
-  Qualidade:      validar_dados, diagnosticar_dados, videos_sem_jogo, adicionar_alias,
-                  status_sistema
+  Qualidade:      validar_dados, diagnosticar_dados, videos_sem_jogo, adicionar_jogo,
+                  adicionar_alias, status_sistema
   Rotina:         rotina_diaria (faz o fluxo do dia inteiro em um comando)
 
 Exemplos:
@@ -1323,6 +1365,26 @@ def _construir_parser() -> argparse.ArgumentParser:
     subcomandos.add_parser(
         "videos_sem_jogo",
         help="Lista videos de referencia sem jogo detectado, por views (ache aliases faltando).",
+    )
+
+    jogo_parser = subcomandos.add_parser(
+        "adicionar_jogo",
+        help="Cadastra um jogo novo no jogos_seed.csv (o detector so enxerga o que esta la).",
+    )
+    jogo_parser.add_argument("nome", help="Nome do jogo, como deve aparecer no ranking.")
+    jogo_parser.add_argument(
+        "--aliases",
+        default="",
+        help="Aliases separados por | (padrao: o proprio nome em minusculas).",
+    )
+    jogo_parser.add_argument(
+        "--genero", default="", help="Genero do jogo (ex: horror coop)."
+    )
+    jogo_parser.add_argument(
+        "--fit",
+        type=_fit_valido,
+        default=5.0,
+        help="Fit inicial de 0 a 10: o palpite de encaixe no seu canal (padrao: 5).",
     )
 
     alias_parser = subcomandos.add_parser(

@@ -255,3 +255,29 @@ def test_video_com_jogo_detectado_nao_e_coleta_antiga():
     problemas = _validar([_meu_video()])
 
     assert "coleta antiga" not in _mensagens(problemas)
+
+
+# --- Fora do seed vem do seed, nao da coluna gravada no CSV ---
+#
+# jogo_no_seed e gravado na hora da coleta e nunca mais muda. Depois de cadastrar o jogo
+# com adicionar_jogo, a linha antiga continua dizendo "nao" e o aviso continuaria vivo
+# para sempre. A pergunta certa e feita ao jogos_seed.csv, que e a fonte da verdade.
+
+def test_jogo_ja_cadastrado_no_seed_para_de_ser_reportado():
+    # A linha ainda carrega jogo_no_seed=False (coletada antes do cadastro), mas o jogo
+    # ja existe no seed passado para a validacao.
+    problemas = _validar([_meu_video(jogo="Repo", jogo_no_seed=False)])
+
+    assert "nao esta no" not in _mensagens(problemas)
+
+
+def test_jogo_reconhecido_por_alias_conta_como_no_seed():
+    problemas = _validar([_meu_video(jogo="repo", jogo_no_seed=False)])
+
+    assert "nao esta no" not in _mensagens(problemas)
+
+
+def test_jogo_ausente_do_seed_e_reportado_mesmo_com_flag_dizendo_que_esta():
+    problemas = _validar([_meu_video(jogo="Lava and Aqua", jogo_no_seed=True)])
+
+    assert "nao esta no" in _mensagens(problemas)
