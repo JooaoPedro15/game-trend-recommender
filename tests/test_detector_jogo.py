@@ -179,3 +179,100 @@ def test_em_conteudo_nenhum_jogo_detectado():
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# --- Desempate entre jogos: termo mais longo vence, nao a ordem do arquivo ---
+#
+# _detectar_por_aliases devolvia o primeiro jogo que casasse, percorrendo o seed na ordem
+# das linhas. Com isso um alias curto e generico ("mine") roubava a deteccao de um jogo
+# citado por inteiro so por estar antes no arquivo. Casar um termo longo e evidencia mais
+# forte: mais caracteres, menos chance de coincidencia.
+
+def _seed_com_alias_curto():
+    return [
+        JogoSeed(nome="Minecraft", aliases=["minecraft", "mine"], genero="sandbox", fit_inicial=7),
+        JogoSeed(nome="Roblox", aliases=["roblox"], genero="variado", fit_inicial=7),
+    ]
+
+
+def test_termo_mais_longo_vence_alias_curto():
+    deteccao = detectar_jogo_em_conteudo(_seed_com_alias_curto(), titulo="Mine Rescue no Roblox")
+
+    assert deteccao.jogo.nome == "Roblox"
+
+
+def test_desempate_nao_depende_da_ordem_do_seed():
+    invertido = list(reversed(_seed_com_alias_curto()))
+
+    deteccao = detectar_jogo_em_conteudo(invertido, titulo="Mine Rescue no Roblox")
+
+    assert deteccao.jogo.nome == "Roblox"
+
+
+def test_alias_curto_ainda_detecta_quando_e_o_unico_sinal():
+    deteccao = detectar_jogo_em_conteudo(_seed_com_alias_curto(), titulo="joguei mine ontem")
+
+    assert deteccao.jogo.nome == "Minecraft"
+
+
+# --- Confianca proporcional a deliberacao do marcador ---
+#
+# "Jogo: X" e um rotulo explicito e vale mesmo para jogo fora do seed. "Game - X" pode ser
+# prosa comum numa descricao ("Game - Play Store: baixe aqui"), entao so conta quando o
+# nome casa com o seed. Sem essa distincao, uma linha qualquer com hifen sequestrava a
+# deteccao com confianca alta e bloqueava titulo, tags e comentarios.
+
+def test_marcador_com_hifen_fora_do_seed_nao_bloqueia_as_outras_fontes():
+    deteccao = detectar_jogo_em_conteudo(
+        _seed_com_alias_curto(),
+        titulo="Roblox gameplay",
+        descricao="Game - Play Store: baixe aqui",
+    )
+
+    assert deteccao.jogo.nome == "Roblox"
+    assert deteccao.fonte == "titulo"
+
+
+def test_marcador_com_hifen_fora_do_seed_sem_outra_fonte_nao_detecta():
+    deteccao = detectar_jogo_em_conteudo(
+        _seed_com_alias_curto(),
+        titulo="sem pista",
+        descricao="Game - Play Store: baixe aqui",
+    )
+
+    assert deteccao.detectou is False
+    assert deteccao.jogo_detectado == ""
+
+
+def test_marcador_com_dois_pontos_fora_do_seed_continua_valendo():
+    deteccao = detectar_jogo_em_conteudo(
+        _seed_com_alias_curto(),
+        titulo="Roblox gameplay",
+        descricao="Jogo: Lava and Aqua",
+    )
+
+    assert deteccao.jogo_detectado == "Lava and Aqua"
+    assert deteccao.jogo_no_seed is False
+    assert deteccao.fonte == "descricao"
+
+
+def test_marcador_com_link_e_descartado():
+    deteccao = detectar_jogo_em_conteudo(
+        _seed_com_alias_curto(),
+        titulo="Roblox gameplay",
+        descricao="Jogo: https://loja.com/jogo",
+    )
+
+    assert deteccao.jogo.nome == "Roblox"
+
+
+def test_marcador_com_frase_longa_demais_e_descartado():
+    frase = "compre agora com desconto na promocao de fim de ano da loja parceira oficial"
+
+    deteccao = detectar_jogo_em_conteudo(
+        _seed_com_alias_curto(),
+        titulo="Roblox gameplay",
+        descricao=f"Jogo: {frase}",
+    )
+
+    assert deteccao.jogo.nome == "Roblox"

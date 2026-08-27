@@ -267,3 +267,21 @@ def test_migrar_arquivo_inexistente_nao_cria_nada(tmp_path):
 
     assert migrar_meus_videos(caminho) == []
     assert not caminho.exists()
+
+
+# --- status_analise: preservar decisao, nao preservar o valor inicial ---
+#
+# "pendente" e so o padrao do dataclass, nao uma escolha de ninguem. Deixar ele vencer na
+# atualizacao congelava a linha: um video recoletado que passasse a ter jogo fora do seed
+# nunca conseguia virar "jogo_pendente_seed". Status diferente do padrao continua vencendo.
+
+def test_update_promove_status_a_partir_de_pendente(tmp_path):
+    caminho = tmp_path / "meus_videos.csv"
+    salvar_meu_video(caminho, _meu_video(status_analise="pendente"), data_coleta="2026-06-15")
+
+    salvar_meu_video(
+        caminho, _meu_video(status_analise="jogo_pendente_seed"), data_coleta="2026-06-17"
+    )
+
+    linhas = _ler_linhas(caminho)
+    assert linhas[0]["status_analise"] == "jogo_pendente_seed"

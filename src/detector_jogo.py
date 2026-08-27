@@ -28,11 +28,16 @@ class DeteccaoJogo:
         return bool(self.jogo_detectado.strip())
 
 
-# Padrao explicito na descricao: "Jogo: X", "Game: X" ou "Nome do jogo: X".
+# Padrao explicito na descricao: "Jogo: X", "Game: X" ou "Nome do jogo: X". O separador
+# fica no grupo 1 de proposito: dois-pontos e um rotulo deliberado, hifen pode ser prosa
+# comum ("Game - Play Store: baixe aqui"), e a deteccao trata os dois com pesos diferentes.
 PADRAO_EXPLICITO = re.compile(
-    r"^\s*(?:jogo|game|nome\s+do\s+jogo)\s*(?::|-)\s*(.+?)\s*$",
+    r"^\s*(?:jogo|game|nome\s+do\s+jogo)\s*(:|-)\s*(.+?)\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
+
+# Nome de jogo mais comprido que isto e quase certamente uma frase que caiu no padrao.
+TAMANHO_MAXIMO_NOME_JOGO = 60
 
 
 def detectar_jogos_no_video(
@@ -61,17 +66,21 @@ def detectar_jogo_em_conteudo(
     tags = tags or []
     comentarios = comentarios or []
 
-    for nome_explicito in _extrair_jogos_explicitos(descricao):
+    for nome_explicito, rotulo_deliberado in _extrair_jogos_explicitos(descricao):
         jogo = _detectar_por_aliases(nome_explicito, jogos)
         if jogo is not None:
             return DeteccaoJogo(jogo, "alta", "descricao")
-        return DeteccaoJogo(
-            None,
-            "alta",
-            "descricao",
-            jogo_detectado=nome_explicito,
-            jogo_no_seed=False,
-        )
+        # Nome fora do seed so e aceito como esta quando veio de um rotulo deliberado
+        # ("Jogo: X"): ai e o autor declarando o jogo. Vindo de hifen, seguimos para as
+        # outras fontes em vez de sequestrar a deteccao com um palpite fraco.
+        if rotulo_deliberado:
+            return DeteccaoJogo(
+                None,
+                "alta",
+                "descricao",
+                jogo_detectado=nome_explicito,
+                jogo_no_seed=False,
+            )
 
     jogo = _detectar_por_tag_exata(tags, jogos)
     if jogo is not None:
@@ -94,23 +103,44 @@ def detectar_jogo_em_conteudo(
     )
 
 
-# Procura marcadores explicitos ("Jogo: X", "Game - X") na descricao e devolve os
-# nomes limpos, sem exigir que eles ja existam no seed.
-def _extrair_jogos_explicitos(descricao: str) -> list[str]:
-    nomes = []
+# Procura marcadores explicitos ("Jogo: X", "Game - X") na descricao e devolve pares
+# (nome limpo, rotulo_deliberado), sem exigir que o nome ja exista no seed.
+# rotulo_deliberado e True so para o separador dois-pontos. Nomes implausiveis (link ou
+# frase longa) sao descartados aqui: entrar como jogo poluiria o meus_videos.csv e o
+# agrupamento do fit real com texto que nunca foi nome de jogo.
+def _extrair_jogos_explicitos(descricao: str) -> list[tuple[str, bool]]:
+    encontrados = []
     for correspondencia in PADRAO_EXPLICITO.finditer(descricao or ""):
-        nome = _limpar_nome_extraido(correspondencia.group(1))
-        if nome:
-            nomes.append(nome)
-    return nomes
+        nome = _limpar_nome_extraido(correspondencia.group(2))
+        if _nome_de_jogo_plausivel(nome):
+            encontrados.append((nome, correspondencia.group(1) == ":"))
+    return encontrados
 
 
-# Primeiro jogo cujo nome/alias aparece no texto (mesma logica de _termo_aparece).
+# Filtro barato contra o que claramente nao e nome de jogo: vazio, link ou frase longa.
+def _nome_de_jogo_plausivel(nome: str) -> bool:
+    if not nome or len(nome) > TAMANHO_MAXIMO_NOME_JOGO:
+        return False
+
+    minusculo = nome.casefold()
+    return "http" not in minusculo and "www." not in minusculo
+
+
+# Jogo cujo termo MAIS LONGO aparece no texto. O criterio nao e a ordem do seed: casar um
+# termo comprido e evidencia mais forte que casar um alias curto e generico, que aparece
+# por coincidencia. Sem isso, "Mine Rescue no Roblox" virava Minecraft so porque o alias
+# "mine" estava numa linha anterior do arquivo. Empate mantem a ordem do seed.
 def _detectar_por_aliases(texto: str, jogos: list[JogoSeed]) -> JogoSeed | None:
+    melhor_jogo = None
+    melhor_tamanho = 0
+
     for jogo in jogos:
-        if any(_termo_aparece(texto, termo) for termo in _termos_do_jogo(jogo)):
-            return jogo
-    return None
+        for termo in _termos_do_jogo(jogo):
+            if len(termo) > melhor_tamanho and _termo_aparece(texto, termo):
+                melhor_jogo = jogo
+                melhor_tamanho = len(termo)
+
+    return melhor_jogo
 
 
 # Primeiro jogo cujo nome/alias casa exatamente com uma tag normalizada.

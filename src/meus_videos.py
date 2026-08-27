@@ -80,8 +80,8 @@ def salvar_meu_video(
 
     for indice, linha in enumerate(linhas):
         if linha.get("video_id") == meu_video.video_id:
-            nova_linha["status_analise"] = (
-                linha.get("status_analise") or meu_video.status_analise
+            nova_linha["status_analise"] = _status_atualizado(
+                linha.get("status_analise"), meu_video.status_analise
             )
             linhas[indice] = nova_linha
             _reescrever_csv(caminho, linhas)
@@ -90,6 +90,18 @@ def salvar_meu_video(
     linhas.append(nova_linha)
     _reescrever_csv(caminho, linhas)
     return "criado"
+
+
+# Decide o status_analise na atualizacao. Um status ja registrado tem prioridade, porque
+# foi decisao de alguem sobre a linha — menos "pendente", que e so o valor inicial do
+# dataclass. Deixar "pendente" vencer congelava a linha: um video recoletado que passasse a
+# ter jogo fora do seed nunca conseguia virar "jogo_pendente_seed".
+def _status_atualizado(salvo: str | None, novo: str) -> str:
+    salvo = (salvo or "").strip()
+    if salvo and salvo != "pendente":
+        return salvo
+
+    return novo or "pendente"
 
 
 # Le o cabecalho gravado no arquivo (lista vazia se ele nao existe ou esta vazio).
