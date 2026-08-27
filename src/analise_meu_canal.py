@@ -9,7 +9,7 @@
 
 import json
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from coletor_youtube import (
@@ -22,6 +22,14 @@ from coletor_youtube import (
 from detector_jogo import DeteccaoJogo, detectar_jogo_em_conteudo
 from modelos import ComentariosColetados, DetalheVideoYoutube, JogoSeed, MeuVideo
 from meus_videos import salvar_meu_video
+
+
+# Por quanto tempo o checkpoint de ids continua confiavel. Ele existe para retomar uma
+# coleta interrompida sem repaginar a playlist de uploads, e repaginar custa pouco (~1
+# unidade de quota por 50 videos). Ja um checkpoint velho ESCONDE todo video publicado
+# depois dele, e a coleta fica cega sem avisar ninguem. Os dois erros nao custam a mesma
+# coisa, entao a validade e curta de proposito: erra para o lado barato.
+VALIDADE_CHECKPOINT_HORAS = 6
 
 
 # Coleta os videos recentes do canal, detecta o jogo de cada um e salva/atualiza em
@@ -98,7 +106,7 @@ def analisar_canal_completo(
     ao_progresso_lote: Callable[[int, int], None] | None = None,
 ) -> dict[str, int]:
     ids = _obter_ids_com_checkpoint(
-        channel_id, limite_maximo, caminho_checkpoint, ao_progresso_ids
+        channel_id, limite_maximo, caminho_checkpoint, ao_progresso_ids, forcar=forcar
     )
     novos = ids if forcar else [video_id for video_id in ids if video_id not in ids_existentes]
 
@@ -266,8 +274,11 @@ def _obter_ids_com_checkpoint(
     limite_maximo: int | None,
     caminho_checkpoint: str | Path | None,
     ao_progresso_ids: Callable[[int, int], None] | None,
+    forcar: bool = False,
 ) -> list[str]:
-    ids_checkpoint = _carregar_checkpoint_ids(caminho_checkpoint, channel_id, limite_maximo)
+    ids_checkpoint = _carregar_checkpoint_ids(
+        caminho_checkpoint, channel_id, limite_maximo, forcar
+    )
     if ids_checkpoint is not None:
         return ids_checkpoint
 
@@ -276,13 +287,16 @@ def _obter_ids_com_checkpoint(
     return ids
 
 
-# Carrega checkpoint sem credenciais, validando canal e teto da coleta.
+# Carrega checkpoint sem credenciais, validando canal, teto da coleta e validade. Com
+# forcar o checkpoint e descartado mesmo dentro do prazo: quem pede recoleta quer a lista
+# de ids de agora, nao a que estava guardada no disco.
 def _carregar_checkpoint_ids(
     caminho_checkpoint: str | Path | None,
     channel_id: str,
     limite_maximo: int | None,
+    forcar: bool = False,
 ) -> list[str] | None:
-    if caminho_checkpoint is None:
+    if caminho_checkpoint is None or forcar:
         return None
     caminho = Path(caminho_checkpoint)
     if not caminho.exists():
@@ -293,10 +307,23 @@ def _carregar_checkpoint_ids(
         return None
     if dados.get("channel_id") != channel_id or dados.get("limite_maximo") != limite_maximo:
         return None
+    if _checkpoint_vencido(dados.get("salvo_em")):
+        return None
     ids = dados.get("video_ids", [])
     if not isinstance(ids, list):
         return None
     return [str(video_id) for video_id in ids if str(video_id).strip()]
+
+
+# Um checkpoint so vale por VALIDADE_CHECKPOINT_HORAS. Sem data, ou com data ilegivel,
+# ele conta como vencido: na duvida repaginar (barato) e melhor que confiar (arriscado).
+def _checkpoint_vencido(salvo_em: object) -> bool:
+    try:
+        data_salvo = datetime.fromisoformat(str(salvo_em))
+    except (TypeError, ValueError):
+        return True
+
+    return datetime.now() - data_salvo > timedelta(hours=VALIDADE_CHECKPOINT_HORAS)
 
 
 # Salva somente IDs e metadados operacionais, nunca chave de API.

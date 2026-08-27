@@ -1,6 +1,7 @@
 import io
 import json
 import sys
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from pathlib import Path
 from urllib.error import HTTPError
@@ -513,3 +514,108 @@ def test_analisar_canal_completo_forcar_preenche_linha_antiga_sem_descricao(
     linha = next(l for l in _ler_linhas(destino) if l["video_id"] == "VID0")
     assert linha["descricao"] == "Jogo: Resident Evil"
     assert linha["jogo_detectado"] == "Resident Evil"
+
+
+# --- Validade do checkpoint de ids: cache sem expiracao esconde upload novo ---
+#
+# O checkpoint existe para retomar uma coleta interrompida sem repaginar a playlist.
+# Sem validade ele congela a lista de ids: todo video publicado depois fica invisivel,
+# por mais que a coleta rode. O campo salvo_em ja era gravado — so nunca era lido.
+
+def _escrever_checkpoint(caminho, ids, salvo_em, channel_id="UC_X", limite_maximo=None):
+    dados = {
+        "channel_id": channel_id,
+        "limite_maximo": limite_maximo,
+        "video_ids": ids,
+        "total": len(ids),
+    }
+    if salvo_em is not None:
+        dados["salvo_em"] = salvo_em
+    caminho.write_text(json.dumps(dados), encoding="utf-8")
+
+
+def _agora_menos(horas):
+    return (datetime.now() - timedelta(hours=horas)).isoformat(timespec="seconds")
+
+
+def test_checkpoint_recente_evita_repaginar_o_canal(monkeypatch, tmp_path):
+    _patch_completo(monkeypatch)
+    checkpoint = tmp_path / "ck.json"
+    # A playlist fake tem 3 videos; o checkpoint tem 1. Se o checkpoint for usado,
+    # "encontrados" fica em 1 — nao ha como confundir com a paginacao.
+    _escrever_checkpoint(checkpoint, ["VID_DO_CHECKPOINT"], _agora_menos(1))
+
+    resumo = analisar_canal_completo(
+        "UC_X", _jogos(), tmp_path / "m.csv", set(), None, 0, 0,
+        caminho_checkpoint=checkpoint,
+    )
+
+    assert resumo["encontrados"] == 1
+
+
+def test_checkpoint_vencido_repagina_o_canal(monkeypatch, tmp_path):
+    _patch_completo(monkeypatch)
+    checkpoint = tmp_path / "ck.json"
+    _escrever_checkpoint(checkpoint, ["VID_DO_CHECKPOINT"], _agora_menos(7))
+
+    resumo = analisar_canal_completo(
+        "UC_X", _jogos(), tmp_path / "m.csv", set(), None, 0, 0,
+        caminho_checkpoint=checkpoint,
+    )
+
+    assert resumo["encontrados"] == 3
+
+
+def test_checkpoint_sem_data_e_descartado(monkeypatch, tmp_path):
+    _patch_completo(monkeypatch)
+    checkpoint = tmp_path / "ck.json"
+    _escrever_checkpoint(checkpoint, ["VID_DO_CHECKPOINT"], None)
+
+    resumo = analisar_canal_completo(
+        "UC_X", _jogos(), tmp_path / "m.csv", set(), None, 0, 0,
+        caminho_checkpoint=checkpoint,
+    )
+
+    assert resumo["encontrados"] == 3
+
+
+def test_checkpoint_com_data_invalida_e_descartado(monkeypatch, tmp_path):
+    _patch_completo(monkeypatch)
+    checkpoint = tmp_path / "ck.json"
+    _escrever_checkpoint(checkpoint, ["VID_DO_CHECKPOINT"], "ontem de manha")
+
+    resumo = analisar_canal_completo(
+        "UC_X", _jogos(), tmp_path / "m.csv", set(), None, 0, 0,
+        caminho_checkpoint=checkpoint,
+    )
+
+    assert resumo["encontrados"] == 3
+
+
+def test_forcar_ignora_checkpoint_ainda_valido(monkeypatch, tmp_path):
+    _patch_completo(monkeypatch)
+    checkpoint = tmp_path / "ck.json"
+    _escrever_checkpoint(checkpoint, ["VID_DO_CHECKPOINT"], _agora_menos(1))
+
+    resumo = analisar_canal_completo(
+        "UC_X", _jogos(), tmp_path / "m.csv", set(), None, 0, 0,
+        forcar=True,
+        caminho_checkpoint=checkpoint,
+    )
+
+    assert resumo["encontrados"] == 3
+
+
+def test_repaginar_regrava_o_checkpoint_com_data_nova(monkeypatch, tmp_path):
+    _patch_completo(monkeypatch)
+    checkpoint = tmp_path / "ck.json"
+    _escrever_checkpoint(checkpoint, ["VID_DO_CHECKPOINT"], _agora_menos(7))
+
+    analisar_canal_completo(
+        "UC_X", _jogos(), tmp_path / "m.csv", set(), None, 0, 0,
+        caminho_checkpoint=checkpoint,
+    )
+
+    dados = json.loads(checkpoint.read_text(encoding="utf-8"))
+    assert dados["video_ids"] == ["VID0", "VID1", "VID2"]
+    assert datetime.fromisoformat(dados["salvo_em"]) > datetime.now() - timedelta(minutes=5)
