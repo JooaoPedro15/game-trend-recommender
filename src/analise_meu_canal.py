@@ -81,6 +81,9 @@ def analisar_meu_canal(
 # Assim o comentario, que e o gasto caro, so e buscado onde o metadado falhou.
 # ids_existentes (injetado) sao os video_ids ja em meus_videos.csv. Devolve um resumo
 # com o progresso. limite_maximo opcional poe um teto na quantidade de videos.
+# forcar=True desliga o passo 2: o cache por id vira uma armadilha quando a linha salva
+# esta incompleta (video coletado antes das colunas descricao/tags existirem fica sem
+# nenhuma fonte de deteccao e nunca mais e visitado). E a valvula de escape do cache.
 def analisar_canal_completo(
     channel_id: str,
     jogos: list[JogoSeed],
@@ -89,6 +92,7 @@ def analisar_canal_completo(
     limite_maximo: int | None = None,
     limite_comentarios: int = 20,
     comentarios_extra_sem_jogo: int = 0,
+    forcar: bool = False,
     caminho_checkpoint: str | Path | None = None,
     ao_progresso_ids: Callable[[int, int], None] | None = None,
     ao_progresso_lote: Callable[[int, int], None] | None = None,
@@ -96,7 +100,7 @@ def analisar_canal_completo(
     ids = _obter_ids_com_checkpoint(
         channel_id, limite_maximo, caminho_checkpoint, ao_progresso_ids
     )
-    novos = [video_id for video_id in ids if video_id not in ids_existentes]
+    novos = ids if forcar else [video_id for video_id in ids if video_id not in ids_existentes]
 
     resumo = {
         "encontrados": len(ids),

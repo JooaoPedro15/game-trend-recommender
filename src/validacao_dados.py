@@ -213,6 +213,27 @@ def _validar_meus_videos(
             )
         )
 
+    # O detector SEMPRE grava um motivo_nao_detectado quando nao acha jogo. Logo, "sem jogo
+    # E sem motivo" so acontece em linha salva antes da deteccao atual — o sinal exato de
+    # coleta antiga. Vale checar porque a coleta completa pula quem ja esta no CSV: sem
+    # --forcar essas linhas nunca se consertam, e o aviso de colunas_faltando ja se calou
+    # depois da migracao do cabecalho.
+    coleta_antiga = [
+        video
+        for video in meus_videos
+        if not video.jogo_detectado.strip() and not video.motivo_nao_detectado.strip()
+    ]
+    if coleta_antiga:
+        problemas.append(
+            Problema(
+                "aviso",
+                f"{len(coleta_antiga)} video(s) de coleta antiga: sem jogo detectado e sem "
+                "motivo registrado (descricao e tags provavelmente vazias).",
+                "Rode coletar_meu_canal --todos-videos --forcar para recoletar essas "
+                "linhas; o cache por id sozinho nunca chega nelas.",
+            )
+        )
+
     fora_do_seed = [
         video
         for video in meus_videos

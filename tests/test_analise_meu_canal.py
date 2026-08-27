@@ -15,7 +15,8 @@ import main as main_mod
 from analise_meu_canal import analisar_canal_completo, analisar_meu_canal
 from leitor_csv import _ler_linhas
 from main import coletar_meu_canal_interativo
-from modelos import JogoSeed
+from meus_videos import salvar_meu_video
+from modelos import JogoSeed, MeuVideo
 
 
 def _jogos() -> list[JogoSeed]:
@@ -462,3 +463,53 @@ def test_cli_diagnosticar_meu_video_mostra_campos_relevantes(monkeypatch, tmp_pa
     assert "Confianca: alta" in saida
     assert "fora do seed" in saida
     assert "CHAVE_FAKE" not in saida
+
+
+# --- Recoleta forcada: o cache de ids_existentes precisa de valvula de escape ---
+#
+# Regressao: videos salvos antes da coluna descricao existir ficavam presos. A migracao
+# arruma o cabecalho, mas so uma nova coleta preenche a linha — e a coleta completa
+# pulava justamente quem ja estava no CSV. Com --forcar o video volta a ser analisado.
+
+def test_analisar_canal_completo_forcar_reanalisa_videos_em_cache(monkeypatch, tmp_path):
+    _patch_completo(monkeypatch)
+    destino = tmp_path / "meus_videos.csv"
+
+    resumo = analisar_canal_completo(
+        "UC_X", _jogos(), destino, {"VID0", "VID1"}, None, 10, 0, forcar=True
+    )
+
+    assert resumo["encontrados"] == 3
+    assert resumo["em_cache"] == 0
+    assert resumo["analisados"] == 3
+
+
+def test_analisar_canal_completo_forcar_preenche_linha_antiga_sem_descricao(
+    monkeypatch, tmp_path
+):
+    _patch_completo(monkeypatch)
+    destino = tmp_path / "meus_videos.csv"
+    # Linha no formato antigo: sem descricao, sem tags e sem jogo detectado.
+    salvar_meu_video(
+        destino,
+        MeuVideo(
+            video_id="VID0",
+            titulo="meu video VID0",
+            url="https://y/VID0",
+            data_publicacao="2026-06-10",
+            jogo_detectado="",
+            confianca_jogo="nao_detectado",
+            fonte_deteccao="nao_detectado",
+            views=1000,
+            likes=100,
+            comentarios=10,
+            descricao="",
+            tags=[],
+        ),
+    )
+
+    analisar_canal_completo("UC_X", _jogos(), destino, {"VID0"}, None, 10, 0, forcar=True)
+
+    linha = next(l for l in _ler_linhas(destino) if l["video_id"] == "VID0")
+    assert linha["descricao"] == "Jogo: Resident Evil"
+    assert linha["jogo_detectado"] == "Resident Evil"

@@ -108,3 +108,31 @@ def test_todos_videos_dry_run_via_cli(tmp_path, monkeypatch):
     _preparar(tmp_path, monkeypatch)
 
     assert main.main(["coletar_meu_canal", "--todos-videos", "--dry-run"]) == 0
+
+
+# --- --forcar: so faz sentido junto com --todos-videos (a coleta recente ja reanalisa) ---
+
+def test_forcar_com_todos_videos_aparece_no_plano(tmp_path, monkeypatch, capsys):
+    _preparar(tmp_path, monkeypatch)
+
+    main.coletar_meu_canal_interativo(None, 20, dry_run=True, todos_videos=True, forcar=True)
+
+    saida = capsys.readouterr().out
+    assert "reanalisaria" in saida.lower()
+    assert "nada foi salvo" in saida.lower()
+
+
+def test_forcar_sem_todos_videos_apenas_avisa(tmp_path, monkeypatch, capsys):
+    _preparar(tmp_path, monkeypatch)
+
+    main.coletar_meu_canal_interativo(5, 20, dry_run=True, forcar=True)
+
+    saida = capsys.readouterr().out.lower()
+    assert "--forcar" in saida
+    assert "ignorado" in saida
+
+
+def test_todos_videos_forcar_dry_run_via_cli(tmp_path, monkeypatch):
+    _preparar(tmp_path, monkeypatch)
+
+    assert main.main(["coletar_meu_canal", "--todos-videos", "--forcar", "--dry-run"]) == 0

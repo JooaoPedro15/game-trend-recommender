@@ -98,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     todos_videos = getattr(args, "todos_videos", False)
     comentarios_extra_sem_jogo = getattr(args, "comentarios_extra_sem_jogo", 0)
     todos_comentarios = getattr(args, "todos_comentarios", False)
+    forcar = getattr(args, "forcar", False)
 
     if comando == "ranking":
         mostrar_ranking(plataforma, top, desde)
@@ -145,7 +146,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "coletar_meu_canal":
         coletar_meu_canal_interativo(
-            limite, comentarios, dry_run, todos_videos, comentarios_extra_sem_jogo, todos_comentarios
+            limite,
+            comentarios,
+            dry_run,
+            todos_videos,
+            comentarios_extra_sem_jogo,
+            todos_comentarios,
+            forcar,
         )
         return 0
 
@@ -482,7 +489,10 @@ def _plano_coleta_meu_canal(limite: int, limite_comentarios: int) -> None:
 
 # Mostra o plano da coleta COMPLETA (--todos-videos), sem chamar a API nem salvar.
 def _plano_coleta_completa(
-    limite_maximo: int | None, limite_comentarios: int, comentarios_extra_sem_jogo: int
+    limite_maximo: int | None,
+    limite_comentarios: int,
+    comentarios_extra_sem_jogo: int,
+    forcar: bool = False,
 ) -> None:
     channel_id = ler_id_canal_proprio()
     alvo = channel_id or "(MEU_CANAL_YOUTUBE_ID nao configurado)"
@@ -500,7 +510,14 @@ def _plano_coleta_completa(
         f"DRY-RUN: comentarios so para videos NAO detectados por titulo/descricao/tags "
         f"(ate {limite_comentarios}/video{extra})."
     )
-    print("DRY-RUN: videos ja em meus_videos.csv sao pulados (cache). Nada foi salvo.")
+    if forcar:
+        print(
+            "DRY-RUN: --forcar ligado: reanalisaria TAMBEM os videos ja salvos em "
+            "meus_videos.csv (nenhum e pulado por cache), recoletando descricao, tags e "
+            "metricas. Nada foi salvo."
+        )
+    else:
+        print("DRY-RUN: videos ja em meus_videos.csv sao pulados (cache). Nada foi salvo.")
 
 
 # Coleta e analisa os meus videos e salva em data/meus_videos.csv. Sem --todos-videos pega
@@ -513,7 +530,17 @@ def coletar_meu_canal_interativo(
     todos_videos: bool = False,
     comentarios_extra_sem_jogo: int = 0,
     todos_comentarios: bool = False,
+    forcar: bool = False,
 ) -> None:
+    # Sem --todos-videos a coleta ja reanalisa todos os videos que busca, entao --forcar
+    # nao teria efeito nenhum: avisar e melhor do que aceitar em silencio uma flag inerte.
+    if forcar and not todos_videos:
+        print(
+            "AVISO: --forcar so vale com --todos-videos (a coleta recente ja reanalisa "
+            "os videos que busca) e foi ignorado."
+        )
+        forcar = False
+
     if todos_comentarios:
         print(
             "AVISO: --todos-comentarios ainda nao e recomendado (gasto de quota alto) e "
@@ -522,7 +549,9 @@ def coletar_meu_canal_interativo(
 
     if dry_run:
         if todos_videos:
-            _plano_coleta_completa(limite, limite_comentarios, comentarios_extra_sem_jogo)
+            _plano_coleta_completa(
+                limite, limite_comentarios, comentarios_extra_sem_jogo, forcar
+            )
         else:
             _plano_coleta_meu_canal(limite if limite is not None else 5, limite_comentarios)
         print("DRY-RUN: nada foi salvo.")
@@ -548,7 +577,7 @@ def coletar_meu_canal_interativo(
 
     if todos_videos:
         _coletar_meu_canal_completo(
-            channel_id, jogos, limite, limite_comentarios, comentarios_extra_sem_jogo
+            channel_id, jogos, limite, limite_comentarios, comentarios_extra_sem_jogo, forcar
         )
         return
 
@@ -589,6 +618,7 @@ def _coletar_meu_canal_completo(
     limite_maximo: int | None,
     limite_comentarios: int,
     comentarios_extra_sem_jogo: int,
+    forcar: bool = False,
 ) -> None:
     ids_existentes = {video.video_id for video in ler_meus_videos(MEUS_VIDEOS_CSV)}
     try:
@@ -600,6 +630,7 @@ def _coletar_meu_canal_completo(
             limite_maximo,
             limite_comentarios,
             comentarios_extra_sem_jogo,
+            forcar,
             caminho_checkpoint=MEU_CANAL_IDS_CHECKPOINT,
             ao_progresso_ids=_imprimir_progresso_ids,
             ao_progresso_lote=_imprimir_progresso_lote,
@@ -1361,6 +1392,11 @@ def _construir_parser() -> argparse.ArgumentParser:
         type=_inteiro("--comentarios-extra-sem-jogo", minimo=0),
         default=0,
         help="Comentarios extra so nos videos que continuarem sem jogo (0 = desligado).",
+    )
+    meu_canal.add_argument(
+        "--forcar",
+        action="store_true",
+        help="Com --todos-videos: reanalisa tambem os videos ja salvos (recoleta descricao, tags e metricas).",
     )
     meu_canal.add_argument(
         "--todos-comentarios",

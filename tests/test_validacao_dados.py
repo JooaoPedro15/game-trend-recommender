@@ -64,6 +64,10 @@ def _mensagens(problemas):
     return " | ".join(p.mensagem for p in problemas)
 
 
+def _sugestoes(problemas):
+    return " | ".join(p.sugestao for p in problemas)
+
+
 def test_dados_limpos_sem_problemas():
     problemas = validar_dados(
         [_video()], [_jogo()], [_canal()], [_meu()],
@@ -149,7 +153,13 @@ def test_env_ausente_vira_info():
 # Regressao: com 26 videos e nenhum jogo detectado, a validacao respondia
 # "Nenhum problema encontrado" porque so olhava views zeradas.
 
-def _meu_video(video_id="V1", jogo="Lethal Company", views=1000, jogo_no_seed=True):
+def _meu_video(
+    video_id="V1",
+    jogo="Lethal Company",
+    views=1000,
+    jogo_no_seed=True,
+    motivo_nao_detectado="",
+):
     return MeuVideo(
         video_id=video_id,
         titulo="titulo",
@@ -162,6 +172,7 @@ def _meu_video(video_id="V1", jogo="Lethal Company", views=1000, jogo_no_seed=Tr
         likes=10,
         comentarios=2,
         jogo_no_seed=jogo_no_seed,
+        motivo_nao_detectado=motivo_nao_detectado,
     )
 
 
@@ -216,3 +227,31 @@ def test_sem_colunas_faltando_nao_reclama_do_formato():
     problemas = _validar([_meu_video()], colunas_faltando=[])
 
     assert "coluna(s) do formato atual" not in _mensagens(problemas)
+
+
+# --- Linhas coletadas antes do formato atual: o cabecalho ja esta certo, a linha nao ---
+#
+# O detector sempre grava um motivo_nao_detectado quando nao acha jogo. Entao "sem jogo E
+# sem motivo" so acontece em linha que nunca passou pela deteccao atual — o sinal exato de
+# coleta antiga, que a checagem de colunas_faltando nao enxerga depois da migracao.
+
+def test_video_sem_jogo_e_sem_motivo_vira_aviso_de_coleta_antiga():
+    problemas = _validar([_meu_video(jogo="", motivo_nao_detectado="")])
+
+    assert "aviso" in _severidades(problemas)
+    assert "coleta antiga" in _mensagens(problemas)
+    assert "--forcar" in _sugestoes(problemas)
+
+
+def test_video_sem_jogo_mas_com_motivo_nao_e_coleta_antiga():
+    problemas = _validar(
+        [_meu_video(jogo="", motivo_nao_detectado="nenhum_jogo_do_seed_encontrado_nas_fontes")]
+    )
+
+    assert "coleta antiga" not in _mensagens(problemas)
+
+
+def test_video_com_jogo_detectado_nao_e_coleta_antiga():
+    problemas = _validar([_meu_video()])
+
+    assert "coleta antiga" not in _mensagens(problemas)
