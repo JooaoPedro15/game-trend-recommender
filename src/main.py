@@ -509,11 +509,17 @@ def _plano_coleta_meu_canal(limite: int, limite_comentarios: int) -> None:
     alvo = channel_id or "(MEU_CANAL_YOUTUBE_ID nao configurado)"
     quota = 2 + 2 * limite
     print(
-        f"DRY-RUN: coletaria ate {limite} videos recentes do canal {alvo} "
-        f"(comentarios por video: {limite_comentarios}), detectaria o jogo de cada um e "
-        f"salvaria/atualizaria {MEUS_VIDEOS_CSV}."
+        f"DRY-RUN: coletaria ate {limite} videos recentes do canal {alvo}, detectaria o jogo "
+        f"de cada um e salvaria/atualizaria {MEUS_VIDEOS_CSV}."
     )
-    print(f"DRY-RUN: custo estimado de quota: {quota} unidades. Nenhuma chamada de API feita.")
+    print(
+        f"DRY-RUN: comentarios so para videos NAO detectados por titulo/descricao/tags "
+        f"(ate {limite_comentarios}/video)."
+    )
+    print(
+        f"DRY-RUN: custo estimado de quota: ate {quota} unidades (pior caso, todos sem "
+        "deteccao por metadado). Nenhuma chamada de API feita."
+    )
 
 
 # Mostra o plano da coleta COMPLETA (--todos-videos), sem chamar a API nem salvar.
@@ -612,7 +618,12 @@ def coletar_meu_canal_interativo(
 
     try:
         resumo = analisar_meu_canal(
-            channel_id, jogos, MEUS_VIDEOS_CSV, limite if limite is not None else 5, limite_comentarios
+            channel_id,
+            jogos,
+            MEUS_VIDEOS_CSV,
+            limite if limite is not None else 5,
+            limite_comentarios,
+            comentarios_extra_sem_jogo,
         )
     except RuntimeError as erro:
         print(f"Erro: {erro}")

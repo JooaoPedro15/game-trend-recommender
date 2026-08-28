@@ -116,10 +116,14 @@ def test_erro_de_comentarios_nao_derruba_video(monkeypatch, tmp_path):
     monkeypatch.setattr(coletor_youtube, "urlopen", _boom)
     destino = tmp_path / "meus_videos.csv"
 
-    resumo = analisar_meu_canal("UC_X", _jogos(), destino, limite=1)
+    # limite=2 para alcancar o VID1, o unico que precisa de comentarios (o VID0 e
+    # detectado pelo titulo e nem chega a chamar a API de comentarios).
+    resumo = analisar_meu_canal("UC_X", _jogos(), destino, limite=2)
 
-    assert resumo["analisados"] == 1
+    assert resumo["analisados"] == 2
     assert resumo["erros"] == 0
+    por_id = {linha["video_id"]: linha for linha in _ler_linhas(destino)}
+    assert por_id["VID1"]["comentarios_incompletos"] == "sim"
 
 
 def test_timeout_de_comentarios_nao_interrompe_e_marca_incompleto(monkeypatch, tmp_path, capsys):
@@ -132,14 +136,16 @@ def test_timeout_de_comentarios_nao_interrompe_e_marca_incompleto(monkeypatch, t
     monkeypatch.setattr(coletor_youtube, "urlopen", _timeout)
     destino = tmp_path / "meus_videos.csv"
 
-    resumo = analisar_meu_canal("UC_X", _jogos(), destino, limite=1)
+    resumo = analisar_meu_canal("UC_X", _jogos(), destino, limite=2)
 
-    linhas = _ler_linhas(destino)
-    assert resumo["analisados"] == 1
+    por_id = {linha["video_id"]: linha for linha in _ler_linhas(destino)}
+    assert resumo["analisados"] == 2
     assert resumo["erros"] == 0
-    assert linhas[0]["comentarios_incompletos"] == "sim"
+    assert por_id["VID1"]["comentarios_incompletos"] == "sim"
+    # VID0 foi detectado pelo metadado: nenhuma chamada de comentarios, nada incompleto.
+    assert por_id["VID0"]["comentarios_incompletos"] == "nao"
     saida = capsys.readouterr().out
-    assert "VID0" in saida
+    assert "VID1" in saida
     assert "comentarios" in saida
     assert "continuara" in saida
 
@@ -619,3 +625,57 @@ def test_repaginar_regrava_o_checkpoint_com_data_nova(monkeypatch, tmp_path):
     dados = json.loads(checkpoint.read_text(encoding="utf-8"))
     assert dados["video_ids"] == ["VID0", "VID1", "VID2"]
     assert datetime.fromisoformat(dados["salvo_em"]) > datetime.now() - timedelta(minutes=5)
+
+
+# --- Coleta dos recentes usa a MESMA estrategia de comentarios da coleta completa ---
+#
+# Metadado (descricao/tags/titulo) ja veio junto com o videos.list e nao custa nada;
+# commentThreads custa 1 unidade por video. A coleta completa so buscava comentario onde o
+# metadado falhava, mas a coleta dos recentes buscava sempre — duas logicas de deteccao
+# para o mesmo problema, e a segunda gastando quota a toa.
+
+def _patch_api_com_espiao(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json)
+    pedidos = []
+
+    def _registrar(url, timeout=10):
+        pedidos.append(parse_qs(urlparse(url).query)["videoId"][0])
+        return _SemComentarios()
+
+    monkeypatch.setattr(coletor_youtube, "urlopen", _registrar)
+    return pedidos
+
+
+def test_recentes_nao_buscam_comentarios_quando_metadado_basta(monkeypatch, tmp_path):
+    pedidos = _patch_api_com_espiao(monkeypatch)
+
+    analisar_meu_canal("UC_X", _jogos(), tmp_path / "m.csv", limite=2, limite_comentarios=10)
+
+    # VID0 cita o jogo no titulo e nao precisa de comentarios; so VID1 precisa.
+    assert pedidos == ["VID1"]
+
+
+def test_recentes_com_limite_de_comentarios_zero_nao_chamam_a_api(monkeypatch, tmp_path):
+    pedidos = _patch_api_com_espiao(monkeypatch)
+
+    analisar_meu_canal("UC_X", _jogos(), tmp_path / "m.csv", limite=2, limite_comentarios=0)
+
+    assert pedidos == []
+
+
+def test_recentes_respeitam_comentarios_extra_sem_jogo(monkeypatch, tmp_path):
+    pedidos = _patch_api_com_espiao(monkeypatch)
+
+    # Com limite 0 a primeira tentativa e pulada; o extra e quem dispara a busca. Sem o
+    # parametro chegar ate aqui, nenhuma chamada aconteceria.
+    analisar_meu_canal(
+        "UC_X",
+        _jogos(),
+        tmp_path / "m.csv",
+        limite=2,
+        limite_comentarios=0,
+        comentarios_extra_sem_jogo=50,
+    )
+
+    assert pedidos == ["VID1"]

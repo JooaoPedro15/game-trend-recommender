@@ -35,12 +35,17 @@ VALIDADE_CHECKPOINT_HORAS = 6
 # Coleta os videos recentes do canal, detecta o jogo de cada um e salva/atualiza em
 # caminho_destino. Recebe `jogos` por parametro (injecao) para nao depender de disco e
 # ficar testavel com fakes. Devolve um resumo contavel do que aconteceu.
+# Usa a mesma _detectar_com_estrategia da coleta completa: metadado primeiro (de graca,
+# ja veio no videos.list) e comentarios so onde ele falhou (1 unidade de quota por video).
+# Antes este caminho buscava comentarios sempre — duas logicas de deteccao para o mesmo
+# problema, e a duplicada era a que gastava quota a toa.
 def analisar_meu_canal(
     channel_id: str,
     jogos: list[JogoSeed],
     caminho_destino: str | Path,
     limite: int = 5,
     limite_comentarios: int = 20,
+    comentarios_extra_sem_jogo: int = 0,
 ) -> dict[str, int]:
     resumo = {
         "analisados": 0,
@@ -58,13 +63,8 @@ def analisar_meu_canal(
             continue
 
         resumo["analisados"] += 1
-        comentarios = _coletar_comentarios_seguro(video_id, limite_comentarios)
-        deteccao = detectar_jogo_em_conteudo(
-            jogos,
-            titulo=detalhe.titulo,
-            descricao=detalhe.descricao,
-            tags=detalhe.tags,
-            comentarios=comentarios.textos,
+        deteccao, _por_comentarios, comentarios = _detectar_com_estrategia(
+            detalhe, jogos, limite_comentarios, comentarios_extra_sem_jogo
         )
         if not deteccao.detectou:
             resumo["jogos_nao_detectados"] += 1
