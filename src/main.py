@@ -31,6 +31,7 @@ from meus_videos import (
     listar_meus_videos_sem_jogo,
     migrar_meus_videos,
 )
+from redeteccao import aplicar_redeteccao, imprimir_redeteccao
 from relatorio_meu_canal import gerar_relatorio_meu_canal_markdown
 from repetir_jogos import imprimir_jogos_para_repetir, jogos_para_repetir
 from jogos_falhos import imprimir_jogos_que_nao_funcionaram, jogos_que_nao_funcionaram
@@ -165,6 +166,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if comando == "meus_videos_sem_jogo":
         meus_videos_sem_jogo_interativo()
+        return 0
+
+    if comando == "redetectar_meus_videos":
+        redetectar_meus_videos_interativo(dry_run)
         return 0
 
     if comando == "diagnosticar_meu_video":
@@ -697,6 +702,18 @@ def _imprimir_progresso_ids(pagina: int, total_ids: int) -> None:
 # Mostra progresso da fase de detalhes/deteccao ja com salvamento parcial.
 def _imprimir_progresso_lote(lote: int, total_analisados: int) -> None:
     print(f"Lote {lote} processado: {total_analisados} videos analisados.")
+
+
+# Recalcula a deteccao de todos os meus videos ja salvos, sem tocar a rede. Serve depois de
+# cadastrar jogos/aliases ou de corrigir a deteccao: o texto necessario ja esta no CSV, entao
+# nao ha motivo para pagar uma nova coleta so para reprocessa-lo.
+def redetectar_meus_videos_interativo(dry_run: bool = False) -> None:
+    jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
+    resumo, mudancas = aplicar_redeteccao(MEUS_VIDEOS_CSV, jogos, simular=dry_run)
+    imprimir_redeteccao(resumo, mudancas)
+    if dry_run:
+        print()
+        print("DRY-RUN: nada foi salvo.")
 
 
 # Lista os meus videos em que nenhum jogo foi detectado, lendo data/meus_videos.csv.
@@ -1313,7 +1330,7 @@ Categorias de comandos:
   Monitoramento:  salvar_snapshot_ranking, comparar_rankings, ranking_watchlist,
                   adicionar_watchlist, listar_watchlist, remover_watchlist
   Qualidade:      validar_dados, diagnosticar_dados, videos_sem_jogo, adicionar_jogo,
-                  adicionar_alias, status_sistema
+                  adicionar_alias, redetectar_meus_videos, status_sistema
   Rotina:         rotina_diaria (faz o fluxo do dia inteiro em um comando)
 
 Exemplos:
@@ -1480,6 +1497,16 @@ def _construir_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Simula: mostra o plano e o custo de quota, sem chamar a API nem salvar.",
+    )
+
+    redetectar = subcomandos.add_parser(
+        "redetectar_meus_videos",
+        help="Recalcula o jogo dos seus videos ja salvos, sem rede e sem gastar quota.",
+    )
+    redetectar.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simula: mostra o que mudaria, sem escrever no meus_videos.csv.",
     )
 
     subcomandos.add_parser(

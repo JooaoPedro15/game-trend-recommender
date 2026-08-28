@@ -31,8 +31,14 @@ class DeteccaoJogo:
 # Padrao explicito na descricao: "Jogo: X", "Game: X" ou "Nome do jogo: X". O separador
 # fica no grupo 1 de proposito: dois-pontos e um rotulo deliberado, hifen pode ser prosa
 # comum ("Game - Play Store: baixe aqui"), e a deteccao trata os dois com pesos diferentes.
+#
+# Os espacos horizontais sao [ \t], nunca \s. O \s casa \n tambem: com "\s*" depois do
+# separador, um marcador vazio ("jogo : " sem valor) atravessava as linhas em branco e
+# capturava o paragrafo seguinte — foi assim que a linha de afiliado da descricao virou
+# nome de jogo em 42 videos. O ^ e o $ com MULTILINE ancoram as pontas do padrao, mas nao
+# confinam o miolo dele. O \r no fim cobre descricao com quebra de linha estilo Windows.
 PADRAO_EXPLICITO = re.compile(
-    r"^\s*(?:jogo|game|nome\s+do\s+jogo)\s*(:|-)\s*(.+?)\s*$",
+    r"^[ \t]*(?:jogo|game|nome[ \t]+do[ \t]+jogo)[ \t]*(:|-)[ \t]*(.+?)[ \t\r]*$",
     re.IGNORECASE | re.MULTILINE,
 )
 

@@ -276,3 +276,61 @@ def test_marcador_com_frase_longa_demais_e_descartado():
     )
 
     assert deteccao.jogo.nome == "Roblox"
+
+
+# --- Marcador vazio nao pode engolir o paragrafo seguinte ---
+#
+# Achado no dado real: 42 videos (18,2M views) foram detectados como o jogo
+# "JOGOS COM DESCONTO NA NUUVEM", a linha de afiliado da descricao. A causa e que \s
+# inclui \n: com "jogo : " sem valor, o \s* depois do separador atravessava as linhas em
+# branco e capturava o proximo paragrafo. ^ e $ com MULTILINE ancoram as pontas, mas nao
+# confinam o que esta entre elas.
+
+_DESCRICAO_MARCADOR_VAZIO = (
+    "Obrigado por assistir :) \n"
+    "\n"
+    "jogo : \n"
+    "\n"
+    "JOGOS COM DESCONTO NA NUUVEM\n"
+    "https://click.linksynergy.com/deeplink?id=abc\n"
+)
+
+
+def test_marcador_vazio_nao_engole_o_paragrafo_seguinte():
+    deteccao = detectar_jogo_em_conteudo(
+        _seed_com_alias_curto(), titulo="sem pista", descricao=_DESCRICAO_MARCADOR_VAZIO
+    )
+
+    assert deteccao.detectou is False
+    assert deteccao.jogo_detectado == ""
+
+
+def test_marcador_vazio_nao_bloqueia_a_deteccao_pelo_titulo():
+    deteccao = detectar_jogo_em_conteudo(
+        _seed_com_alias_curto(),
+        titulo="Roblox gameplay",
+        descricao=_DESCRICAO_MARCADOR_VAZIO,
+    )
+
+    assert deteccao.jogo.nome == "Roblox"
+
+
+def test_marcador_preenchido_continua_detectando():
+    deteccao = detectar_jogo_em_conteudo(
+        _seed_com_alias_curto(),
+        titulo="sem pista",
+        descricao="Obrigado por assistir :)\n\njogo : Roblox\n\noutra coisa qualquer\n",
+    )
+
+    assert deteccao.jogo.nome == "Roblox"
+    assert deteccao.fonte == "descricao"
+
+
+def test_marcador_com_espacos_ao_redor_continua_detectando():
+    deteccao = detectar_jogo_em_conteudo(
+        _seed_com_alias_curto(),
+        titulo="sem pista",
+        descricao="  Jogo :   Roblox   \nmais texto\n",
+    )
+
+    assert deteccao.jogo.nome == "Roblox"
