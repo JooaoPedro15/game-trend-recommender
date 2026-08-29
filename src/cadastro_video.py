@@ -17,6 +17,8 @@ CAMPOS_VIDEO = [
     "texto_comentarios",
     "origem",
     "tipo_video",
+    "descricao",
+    "tags",
 ]
 
 
@@ -107,4 +109,7 @@ def _video_para_linha(video: VideoColetado) -> dict[str, str | int]:
         "texto_comentarios": video.texto_comentarios,
         "origem": video.origem,
         "tipo_video": video.tipo_video,
+        "descricao": video.descricao,
+        # Mesma convencao do meus_videos.csv: lista separada por barra vertical.
+        "tags": "|".join(video.tags),
     }

@@ -74,3 +74,46 @@ def test_duas_instancias_nao_compartilham_a_lista_de_tags():
     primeiro.tags.append("repo")
 
     assert segundo.tags == []
+
+
+def test_gravar_e_reler_preserva_descricao_e_tags(tmp_path):
+    from cadastro_video import adicionar_video_csv
+    from leitor_csv import ler_videos_coletados
+
+    caminho = tmp_path / "videos_coletados.csv"
+    video = VideoColetado(
+        titulo="MEU BARCO NAUFRAGO",
+        canal="Lozao",
+        plataforma="youtube",
+        url="https://y/RbIxXnNtwBg",
+        views=90362,
+        likes=100,
+        comentarios=10,
+        data_publicacao="2026-08-01",
+        texto_comentarios="",
+        descricao="nesse video eu trouxe How to fish um game de pescaria",
+        tags=["pescaria", "how to fish"],
+    )
+
+    adicionar_video_csv(caminho, video)
+    lido = ler_videos_coletados(caminho)[0]
+
+    assert lido.descricao == "nesse video eu trouxe How to fish um game de pescaria"
+    assert lido.tags == ["pescaria", "how to fish"]
+
+
+def test_linha_sem_as_colunas_novas_le_como_vazio(tmp_path):
+    from leitor_csv import ler_videos_coletados
+
+    caminho = tmp_path / "antigo.csv"
+    caminho.write_text(
+        "titulo,canal,plataforma,url,views,likes,comentarios,data_publicacao,"
+        "texto_comentarios,origem,tipo_video\n"
+        "t,Canal,youtube,https://y/1,10,1,1,2026-08-01,,youtube,curto\n",
+        encoding="utf-8",
+    )
+
+    lido = ler_videos_coletados(caminho)[0]
+
+    assert lido.descricao == ""
+    assert lido.tags == []
