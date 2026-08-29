@@ -47,6 +47,9 @@ data/*_sensivel.csv
 # Resultado real do meu canal: metricas por video (views, likes, engajamento).
 # Dado de negocio, nao configuracao — o repo e publico.
 data/meus_videos.csv
+# Checkpoint da coleta: a lista completa de ids de upload do meu canal. Estado
+# operacional com validade de horas, nunca configuracao.
+data/meu_canal_ids_checkpoint.json
 
 # Keep the public example CSVs versioned
 !data/canais_referencia.csv
