@@ -186,6 +186,7 @@ def _item_para_detalhe(item: dict, video_id: str | None = None) -> DetalheVideoY
         data_publicacao=base.data_publicacao,
         duracao_segundos=duracao_segundos,
         tipo_video=_inferir_tipo_video(duracao_segundos, item),
+        canal=base.canal,
     )
 
 

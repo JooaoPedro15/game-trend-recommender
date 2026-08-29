@@ -824,3 +824,69 @@ def test_comentario_analisado_nao_carrega_id_de_autor(monkeypatch):
     campos = vars(coleta.analisados[0])
     assert "UC_A" not in str(campos.values())
     assert set(campos) == {"texto", "do_dono", "responde_pergunta_de_jogo", "autor_indice"}
+
+
+# --- O detalhe precisa saber de que canal veio ---
+#
+# O ranker casa peso e peso_similaridade pelo NOME do canal. Um detalhe sem canal nao pode
+# virar VideoColetado sem perder a calibracao inteira, em silencio.
+
+def test_detalhe_guarda_o_nome_do_canal(monkeypatch):
+    import coletor_youtube
+
+    def _fake(url):
+        return {
+            "items": [
+                {
+                    "id": "VID1",
+                    "snippet": {
+                        "title": "MEU BARCO NAUFRAGO",
+                        "channelTitle": "Lozao",
+                        "description": "nesse video eu trouxe How to fish",
+                        "tags": ["pescaria"],
+                        "publishedAt": "2026-08-01T00:00:00Z",
+                        "liveBroadcastContent": "none",
+                    },
+                    "statistics": {"viewCount": "90362", "likeCount": "100", "commentCount": "10"},
+                    "contentDetails": {"duration": "PT8M"},
+                }
+            ]
+        }
+
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake)
+
+    detalhe = coletor_youtube.coletar_detalhe_video("VID1")
+
+    assert detalhe.canal == "Lozao"
+
+
+def test_detalhe_em_lote_tambem_guarda_o_canal(monkeypatch):
+    import coletor_youtube
+
+    def _fake(url):
+        return {
+            "items": [
+                {
+                    "id": vid,
+                    "snippet": {
+                        "title": f"video {vid}",
+                        "channelTitle": "ElCamacho24",
+                        "description": "",
+                        "tags": [],
+                        "publishedAt": "2026-08-01T00:00:00Z",
+                        "liveBroadcastContent": "none",
+                    },
+                    "statistics": {"viewCount": "10", "likeCount": "1", "commentCount": "0"},
+                    "contentDetails": {"duration": "PT30S"},
+                }
+                for vid in ["VID1", "VID2"]
+            ]
+        }
+
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake)
+
+    detalhes = coletor_youtube.coletar_detalhes_em_lote(["VID1", "VID2"])
+
+    assert [d.canal for d in detalhes] == ["ElCamacho24", "ElCamacho24"]

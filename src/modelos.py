@@ -55,6 +55,9 @@ class DetalheVideoYoutube:
     data_publicacao: str
     duracao_segundos: int
     tipo_video: str
+    # O channelTitle ja vem no mesmo snippet. E o ranker casa os pesos do canal por nome,
+    # entao perder esse campo na conversao desliga a calibracao sem avisar.
+    canal: str = ""
 
 
 # Um comentario ja classificado no momento da coleta, para a deteccao decidir o quanto
