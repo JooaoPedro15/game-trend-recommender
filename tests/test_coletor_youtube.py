@@ -188,17 +188,23 @@ def _fake_get_json(url):
         n = int(parse_qs(urlparse(url).query)["maxResults"][0])
         return {"items": [{"contentDetails": {"videoId": f"VID{i}"}} for i in range(n)]}
     if "/videos" in url:
-        vid = parse_qs(urlparse(url).query)["id"][0]
+        ids = parse_qs(urlparse(url).query)["id"][0].split(",")
         return {
             "items": [
                 {
+                    "id": vid,
                     "snippet": {
                         "title": f"jogo {vid}",
                         "channelTitle": "Canal",
+                        "description": "",
+                        "tags": [],
                         "publishedAt": "2026-05-01T00:00:00Z",
+                        "liveBroadcastContent": "none",
                     },
                     "statistics": {"viewCount": "10", "likeCount": "1", "commentCount": "0"},
+                    "contentDetails": {"duration": "PT45S"},
                 }
+                for vid in ids
             ]
         }
     return {"items": []}
@@ -890,3 +896,77 @@ def test_detalhe_em_lote_tambem_guarda_o_canal(monkeypatch):
     detalhes = coletor_youtube.coletar_detalhes_em_lote(["VID1", "VID2"])
 
     assert [d.canal for d in detalhes] == ["ElCamacho24", "ElCamacho24"]
+
+
+# --- Coleta de canal em lote ---
+#
+# Antes: uma chamada videos.list por video (1 unidade cada) e sem contentDetails, entao
+# tipo_video ficava "desconhecido" e descricao/tags eram descartadas. Agora: um lote de ate
+# 50 por chamada, com os tres campos.
+
+def _fake_canal_em_lote(chamadas):
+    def _fake(url):
+        if "/channels" in url:
+            return {"items": [{"contentDetails": {"relatedPlaylists": {"uploads": "UU_X"}}}]}
+        if "/playlistItems" in url:
+            return {
+                "items": [
+                    {"contentDetails": {"videoId": "VID0"}},
+                    {"contentDetails": {"videoId": "VID1"}},
+                ]
+            }
+        if "/videos" in url:
+            chamadas.append(url)
+            ids = parse_qs(urlparse(url).query)["id"][0].split(",")
+            return {
+                "items": [
+                    {
+                        "id": vid,
+                        "snippet": {
+                            "title": f"video {vid}",
+                            "channelTitle": "Lozao",
+                            "description": f"nesse video eu trouxe o jogo {vid}",
+                            "tags": ["gameplay"],
+                            "publishedAt": "2026-08-01T00:00:00Z",
+                            "liveBroadcastContent": "none",
+                        },
+                        "statistics": {
+                            "viewCount": "1000",
+                            "likeCount": "10",
+                            "commentCount": "5",
+                        },
+                        "contentDetails": {"duration": "PT45S"},
+                    }
+                    for vid in ids
+                ]
+            }
+        return {"items": []}
+
+    return _fake
+
+
+def test_coletar_canal_usa_uma_unica_chamada_de_videos(monkeypatch, tmp_path):
+    chamadas = []
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_canal_em_lote(chamadas))
+    destino = tmp_path / "videos_coletados.csv"
+
+    resumo = coletor_youtube.coletar_canal("UC_X", destino, limite=2, caminho_cache=None)
+
+    assert len(chamadas) == 1  # dois videos, uma chamada
+    assert resumo["salvos"] == 2
+
+
+def test_coletar_canal_guarda_descricao_tags_e_tipo(monkeypatch, tmp_path):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_canal_em_lote([]))
+    destino = tmp_path / "videos_coletados.csv"
+
+    coletor_youtube.coletar_canal("UC_X", destino, limite=2, caminho_cache=None)
+
+    videos = {v.url: v for v in ler_videos_coletados(destino)}
+    primeiro = videos["https://www.youtube.com/watch?v=VID0"]
+    assert primeiro.canal == "Lozao"
+    assert primeiro.descricao == "nesse video eu trouxe o jogo VID0"
+    assert primeiro.tags == ["gameplay"]
+    assert primeiro.tipo_video == "curto"  # PT45S

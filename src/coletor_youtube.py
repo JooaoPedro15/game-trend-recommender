@@ -190,6 +190,28 @@ def _item_para_detalhe(item: dict, video_id: str | None = None) -> DetalheVideoY
     )
 
 
+# Converte o detalhe rico em VideoColetado, o modelo que o ranking consome. A conversao
+# existe para o caminho de referencia poder usar o coletor em lote (1 unidade por 50) em
+# vez de uma chamada por video, e de quebra herdar descricao, tags e tipo_video.
+def detalhe_para_video_coletado(detalhe: DetalheVideoYoutube) -> VideoColetado:
+    return VideoColetado(
+        titulo=detalhe.titulo,
+        canal=detalhe.canal,
+        plataforma="youtube",
+        url=detalhe.url,
+        views=detalhe.views,
+        likes=detalhe.likes,
+        comentarios=detalhe.comentarios,
+        data_publicacao=detalhe.data_publicacao,
+        # Comentario nao e coletado aqui: ele alimenta descoberta, nao identificacao.
+        texto_comentarios="",
+        origem="youtube",
+        tipo_video=detalhe.tipo_video,
+        descricao=detalhe.descricao,
+        tags=list(detalhe.tags),
+    )
+
+
 # Busca os detalhes ricos de um video por id (snippet + statistics + contentDetails) e
 # devolve um DetalheVideoYoutube com descricao, tags, duracao e tipo_video inferido.
 # None se nao existir.
@@ -389,7 +411,11 @@ def coletar_videos_por_ids(
     return _coletar_e_salvar(ler_ids_de_arquivo(caminho_ids), caminho_destino, caminho_cache)
 
 
-# Coleta os videos recentes de um canal (uploads playlist) e salva cada um no CSV.
+# Coleta os videos recentes de um canal e salva cada um no CSV. Usa videos.list em LOTE:
+# uma chamada cobre ate 50 videos, contra uma chamada por video do caminho antigo. O cache
+# por id nao entra aqui de proposito — ele economizava 1 unidade por video, e no lote o
+# video inteiro ja custa 1/50 de unidade. O parametro segue na assinatura por
+# compatibilidade com quem ja chama.
 def coletar_canal(
     channel_id: str,
     caminho_destino: str | Path,
@@ -397,7 +423,21 @@ def coletar_canal(
     caminho_cache: str | Path | None = CACHE_PADRAO,
 ) -> dict[str, int]:
     ids = listar_ids_recentes_do_canal(channel_id, limite)
-    return _coletar_e_salvar(ids, caminho_destino, caminho_cache)
+    resumo = {"lidos": len(ids), "encontrados": 0, "salvos": 0, "duplicados": 0, "erros": 0}
+
+    for detalhe in coletar_detalhes_em_lote_varios(ids):
+        resumo["encontrados"] += 1
+        try:
+            adicionar_video_csv(caminho_destino, detalhe_para_video_coletado(detalhe))
+            resumo["salvos"] += 1
+        except VideoDuplicadoError:
+            resumo["duplicados"] += 1
+        except ValueError:
+            resumo["erros"] += 1
+
+    # Video pedido e nao devolvido pela API (apagado/privado) conta como erro.
+    resumo["erros"] += len(ids) - resumo["encontrados"]
+    return resumo
 
 
 # Para cada video recente do canal, busca os detalhes ricos e devolve a lista de
