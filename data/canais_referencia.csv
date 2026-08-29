@@ -1,4 +1,12 @@
 nome,plataforma,url,peso,nicho,tipo_conteudo,peso_similaridade
-Canal Referencia 1,youtube,https://youtube.com/@canal1,1.0,gaming_humor,gameplay,1.3
-Canal Referencia 2,tiktok,https://tiktok.com/@canal2,1.2,shorts_games,shorts,1.1
-Canal Referencia 3,instagram,https://instagram.com/canal3,0.8,review_games,review,0.7
+Play Guima,youtube,https://www.youtube.com/channel/UCUaUhkLyJCgVOMB8YOKSN8g,1.2,casual_puzzle,shorts,1.5
+Jazzghost,youtube,https://www.youtube.com/channel/UCIXguhHCl8eDTkXpEuiGPUA,1.4,casual_puzzle,longo,1.4
+Diogo Matheus Gameplay,youtube,https://www.youtube.com/channel/UCeu6QK5EBVNWrE6YedK8D0g,0.8,casual_indie_humor,shorts,1.3
+kksaiko,youtube,https://www.youtube.com/channel/UCV3XpRxabX2UMbimv2k215Q,1.1,casual_puzzle,longo,1.2
+"T3ddy, só que Games",youtube,https://www.youtube.com/channel/UCKaKxSsyesC2NqNh89Ss7gw,1.2,gaming_humor,misto,1.1
+BeckBroPlays,youtube,https://www.youtube.com/channel/UCZmIVgXi4Cv82se7-xsoZAw,1.1,mobile_casual,shorts,1.0
+Geleia,youtube,https://www.youtube.com/channel/UCEfGV5hx2VrXl4jOUnG0MRQ,1.3,gaming_humor,shorts,1.0
+EazySpeezy,youtube,https://www.youtube.com/channel/UCQSEAbOs6vsJfy7WN7iYaGQ,1.1,browser_games,longo,0.9
+República Coisa de Nerd,youtube,https://www.youtube.com/channel/UChmOR1T5ZNnbRUba3lHRTOg,1.1,nerd_variedades,misto,0.9
+Let's Game It Out,youtube,https://www.youtube.com/channel/UCto7D1L-MiRoOziCXK9uT5Q,1.2,simulador_absurdo,longo,0.8
+Problems Raiz,youtube,https://www.youtube.com/channel/UC8cP4kV1GIbxRH-mlilSniQ,0.9,roblox_shorts,shorts,0.7
