@@ -33,6 +33,10 @@ class VideoColetado:
     texto_comentarios: str
     origem: str = ""
     tipo_video: str = "desconhecido"
+    # A API ja devolve os dois junto com o resto do snippet. Sao a fonte de deteccao mais
+    # confiavel de um video de referencia: texto escrito pelo autor, nao por terceiro.
+    descricao: str = ""
+    tags: list[str] = field(default_factory=list)
 
 
 # Detalhes ricos de um video do YouTube (snippet + statistics + contentDetails).
