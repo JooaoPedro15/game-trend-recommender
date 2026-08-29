@@ -136,6 +136,22 @@ def _validar_videos(
             )
         )
 
+    # Linha sem descricao E sem tags so acontece em video coletado antes dessas colunas
+    # existirem. A coleta recusa URL repetida, entao sem --forcar ela nunca se conserta.
+    sem_texto_do_autor = [
+        video for video in videos if not video.descricao.strip() and not video.tags
+    ]
+    if sem_texto_do_autor:
+        problemas.append(
+            Problema(
+                "aviso",
+                f"{len(sem_texto_do_autor)} de {len(videos)} video(s) de referencia "
+                "sem descricao e sem tags.",
+                "Rode coletar_canal_youtube <id> --forcar para recoletar; sem descricao a "
+                "deteccao so enxerga o titulo.",
+            )
+        )
+
 
 def _validar_canais(problemas: list[Problema], canais: list[CanalReferencia]) -> None:
     if not canais:

@@ -421,6 +421,7 @@ def coletar_canal(
     caminho_destino: str | Path,
     limite: int = 5,
     caminho_cache: str | Path | None = CACHE_PADRAO,
+    forcar: bool = False,
 ) -> dict[str, int]:
     ids = listar_ids_recentes_do_canal(channel_id, limite)
     resumo = {"lidos": len(ids), "encontrados": 0, "salvos": 0, "duplicados": 0, "erros": 0}
@@ -428,7 +429,9 @@ def coletar_canal(
     for detalhe in coletar_detalhes_em_lote_varios(ids):
         resumo["encontrados"] += 1
         try:
-            adicionar_video_csv(caminho_destino, detalhe_para_video_coletado(detalhe))
+            adicionar_video_csv(
+                caminho_destino, detalhe_para_video_coletado(detalhe), substituir=forcar
+            )
             resumo["salvos"] += 1
         except VideoDuplicadoError:
             resumo["duplicados"] += 1

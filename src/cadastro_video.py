@@ -26,20 +26,47 @@ class VideoDuplicadoError(ValueError):
     pass
 
 
-def adicionar_video_csv(caminho: str | Path, video: VideoColetado) -> None:
+# substituir=True troca a linha de mesma URL em vez de recusar. E a valvula de escape do
+# cache: sem ela, um video coletado antes das colunas descricao/tags existirem nunca mais e
+# visitado, exatamente como aconteceu com as linhas legadas do meus_videos.csv.
+def adicionar_video_csv(
+    caminho: str | Path, video: VideoColetado, substituir: bool = False
+) -> None:
     caminho = Path(caminho)
     _validar_video(video)
     _garantir_csv(caminho)
 
-    videos_existentes = ler_videos_coletados(caminho)
-    urls_existentes = {_normalizar_url(video_existente.url) for video_existente in videos_existentes}
+    alvo = _normalizar_url(video.url)
+    nova_linha = _video_para_linha(video)
 
-    if _normalizar_url(video.url) in urls_existentes:
-        raise VideoDuplicadoError("Ja existe um video cadastrado com essa URL.")
+    if not substituir:
+        existentes = ler_videos_coletados(caminho)
+        if any(_normalizar_url(existente.url) == alvo for existente in existentes):
+            raise VideoDuplicadoError("Ja existe um video cadastrado com essa URL.")
 
-    with caminho.open("a", encoding="utf-8", newline="") as arquivo:
-        escritor = csv.DictWriter(arquivo, fieldnames=CAMPOS_VIDEO)
-        escritor.writerow(_video_para_linha(video))
+        with caminho.open("a", encoding="utf-8", newline="") as arquivo:
+            csv.DictWriter(arquivo, fieldnames=CAMPOS_VIDEO).writerow(nova_linha)
+        return
+
+    linhas = _ler_linhas(caminho)
+    for indice, linha in enumerate(linhas):
+        if _normalizar_url(linha.get("url", "")) == alvo:
+            linhas[indice] = nova_linha
+            _reescrever_videos(caminho, linhas)
+            return
+
+    linhas.append(nova_linha)
+    _reescrever_videos(caminho, linhas)
+
+
+# Reescreve o CSV inteiro (cabecalho + linhas), do mesmo jeito que o meus_videos.csv faz.
+# So e usado no caminho de substituicao: no caminho normal o append e suficiente e evita
+# reescrever o arquivo a cada video importado.
+def _reescrever_videos(caminho: Path, linhas: list[dict]) -> None:
+    with caminho.open("w", encoding="utf-8", newline="") as arquivo:
+        escritor = csv.DictWriter(arquivo, fieldnames=CAMPOS_VIDEO, extrasaction="ignore")
+        escritor.writeheader()
+        escritor.writerows(linhas)
 
 
 # Importa em lote os videos de um CSV externo para o CSV principal.

@@ -69,8 +69,10 @@ def _sugestoes(problemas):
 
 
 def test_dados_limpos_sem_problemas():
+    video = _video()
+    video.descricao = "descricao do video"
     problemas = validar_dados(
-        [_video()], [_jogo()], [_canal()], [_meu()],
+        [video], [_jogo()], [_canal()], [_meu()],
         chave_configurada=True, canal_configurado=True,
     )
     assert problemas == []
@@ -281,3 +283,39 @@ def test_jogo_ausente_do_seed_e_reportado_mesmo_com_flag_dizendo_que_esta():
     problemas = _validar([_meu_video(jogo="Lava and Aqua", jogo_no_seed=True)])
 
     assert "nao esta no" in _mensagens(problemas)
+
+
+# --- Video de referencia coletado antes das colunas descricao/tags existirem ---
+
+def _validar_referencia(descricao="", tags=None):
+    video = _video()
+    video.descricao = descricao
+    video.tags = tags or []
+    return validar_dados(
+        [video],
+        [_jogo()],
+        [_canal()],
+        [_meu()],
+        chave_configurada=True,
+        canal_configurado=True,
+    )
+
+
+def test_video_de_referencia_sem_descricao_e_sem_tags_vira_aviso():
+    problemas = _validar_referencia()
+
+    assert "aviso" in _severidades(problemas)
+    assert "sem descricao e sem tags" in _mensagens(problemas)
+    assert "--forcar" in _sugestoes(problemas)
+
+
+def test_video_de_referencia_com_descricao_nao_gera_o_aviso():
+    problemas = _validar_referencia(descricao="nesse video eu trouxe Repo")
+
+    assert "sem descricao e sem tags" not in _mensagens(problemas)
+
+
+def test_video_de_referencia_so_com_tags_nao_gera_o_aviso():
+    problemas = _validar_referencia(tags=["repo"])
+
+    assert "sem descricao e sem tags" not in _mensagens(problemas)

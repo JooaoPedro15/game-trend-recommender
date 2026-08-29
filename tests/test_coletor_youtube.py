@@ -970,3 +970,67 @@ def test_coletar_canal_guarda_descricao_tags_e_tipo(monkeypatch, tmp_path):
     assert primeiro.descricao == "nesse video eu trouxe o jogo VID0"
     assert primeiro.tags == ["gameplay"]
     assert primeiro.tipo_video == "curto"  # PT45S
+
+
+def test_forcar_atualiza_a_linha_ja_existente(monkeypatch, tmp_path):
+    from cadastro_video import adicionar_video_csv
+    from modelos import VideoColetado
+
+    destino = tmp_path / "videos_coletados.csv"
+    # Linha no formato antigo: sem descricao, sem tags, tipo desconhecido.
+    adicionar_video_csv(
+        destino,
+        VideoColetado(
+            titulo="video VID0",
+            canal="Lozao",
+            plataforma="youtube",
+            url="https://www.youtube.com/watch?v=VID0",
+            views=1,
+            likes=0,
+            comentarios=0,
+            data_publicacao="2026-08-01",
+            texto_comentarios="",
+        ),
+    )
+
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_canal_em_lote([]))
+
+    resumo = coletor_youtube.coletar_canal(
+        "UC_X", destino, limite=2, caminho_cache=None, forcar=True
+    )
+
+    videos = {v.url: v for v in ler_videos_coletados(destino)}
+    assert len(videos) == 2  # atualizou, nao duplicou
+    assert videos["https://www.youtube.com/watch?v=VID0"].descricao
+    assert videos["https://www.youtube.com/watch?v=VID0"].tipo_video == "curto"
+    assert resumo["duplicados"] == 0
+
+
+def test_sem_forcar_a_linha_existente_conta_como_duplicada(monkeypatch, tmp_path):
+    from cadastro_video import adicionar_video_csv
+    from modelos import VideoColetado
+
+    destino = tmp_path / "videos_coletados.csv"
+    adicionar_video_csv(
+        destino,
+        VideoColetado(
+            titulo="video VID0",
+            canal="Lozao",
+            plataforma="youtube",
+            url="https://www.youtube.com/watch?v=VID0",
+            views=1,
+            likes=0,
+            comentarios=0,
+            data_publicacao="2026-08-01",
+            texto_comentarios="",
+        ),
+    )
+
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_canal_em_lote([]))
+
+    resumo = coletor_youtube.coletar_canal("UC_X", destino, limite=2, caminho_cache=None)
+
+    assert resumo["duplicados"] == 1
+    assert resumo["salvos"] == 1

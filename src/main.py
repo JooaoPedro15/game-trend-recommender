@@ -2,7 +2,12 @@ import argparse
 from datetime import date, datetime
 from pathlib import Path
 
-from cadastro_video import VideoDuplicadoError, adicionar_video_csv, importar_videos_csv
+from cadastro_video import (
+    VideoDuplicadoError,
+    adicionar_video_csv,
+    importar_videos_csv,
+    migrar_videos_coletados,
+)
 from cadastro_jogo import adicionar_alias_jogo, adicionar_jogo_seed
 from coletor_youtube import (
     CACHE_PADRAO,
@@ -145,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if comando == "coletar_canal_youtube":
-        coletar_canal_youtube_interativo(channel_id, limite)
+        coletar_canal_youtube_interativo(channel_id, limite, forcar)
         return 0
 
     if comando == "listar_meus_videos_youtube":
@@ -1021,9 +1026,12 @@ def relatorio_calibracao_interativo() -> None:
 
 
 # Coleta os videos recentes de um canal do YouTube e mostra o resumo.
-def coletar_canal_youtube_interativo(channel_id: str, limite: int) -> None:
+def coletar_canal_youtube_interativo(
+    channel_id: str, limite: int, forcar: bool = False
+) -> None:
+    migrar_videos_coletados(VIDEOS_CSV)
     try:
-        resumo = coletar_canal(channel_id, VIDEOS_CSV, limite)
+        resumo = coletar_canal(channel_id, VIDEOS_CSV, limite, forcar=forcar)
     except RuntimeError as erro:
         print(f"Erro: {erro}")
         return
@@ -1455,6 +1463,11 @@ def _construir_parser() -> argparse.ArgumentParser:
         type=_inteiro("--limite"),
         default=5,
         help="Quantos videos recentes coletar (padrao: 5).",
+    )
+    canal.add_argument(
+        "--forcar",
+        action="store_true",
+        help="Recoleta tambem os videos ja salvos (atualiza descricao, tags e metricas).",
     )
 
     meus_videos = subcomandos.add_parser(
