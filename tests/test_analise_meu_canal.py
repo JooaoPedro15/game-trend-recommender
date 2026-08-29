@@ -448,12 +448,15 @@ def test_cli_diagnosticar_meu_video_mostra_campos_relevantes(monkeypatch, tmp_pa
             tipo_video="longo",
         )
 
-    def _fake_comentarios(video_id, limite=50):
+    # channel_id_dono chega ate aqui porque o diagnostico usa a mesma deteccao da coleta,
+    # inclusive a fonte comentario_dono; o fake precisa aceitar o mesmo contrato.
+    def _fake_comentarios(video_id, limite=50, channel_id_dono=None):
         return SimpleNamespace(
             textos=["comentario principal", "resposta com contexto"],
             comentarios_principais=1,
             respostas=1,
             incompleto=False,
+            analisados=[],
         )
 
     monkeypatch.setattr(main_mod, "coletar_detalhe_video", _fake_detalhe, raising=False)
@@ -679,3 +682,127 @@ def test_recentes_respeitam_comentarios_extra_sem_jogo(monkeypatch, tmp_path):
     )
 
     assert pedidos == ["VID1"]
+
+
+# ---------------------------------------------------------------------------
+# Deteccao do jogo pelo comentario, fim a fim (coleta -> deteccao -> CSV).
+# ---------------------------------------------------------------------------
+
+CANAL_DONO = "UC_DONO_FAKE"
+CANAL_TERCEIRO_A = "UC_TERCEIRO_A"
+CANAL_TERCEIRO_B = "UC_TERCEIRO_B"
+
+
+class _RespostaJSONFake:
+    def __init__(self, dados):
+        self._dados = dados
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self):
+        return json.dumps(self._dados)
+
+
+# Monta uma thread no formato que a commentThreads.list devolve, com authorChannelId em
+# cada comentario — e exatamente esse campo que a coleta precisa ler e nao pode deixar sair.
+def _thread(topo, autor_topo, respostas):
+    return {
+        "snippet": {
+            "totalReplyCount": len(respostas),
+            "topLevelComment": {
+                "id": "C1",
+                "snippet": {"textDisplay": topo, "authorChannelId": {"value": autor_topo}},
+            },
+        },
+        "replies": {
+            "comments": [
+                {
+                    "id": f"R{indice}",
+                    "snippet": {"textDisplay": texto, "authorChannelId": {"value": autor}},
+                }
+                for indice, (texto, autor) in enumerate(respostas)
+            ]
+        },
+    }
+
+
+def _patch_api_com_threads(monkeypatch, threads):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_get_json)
+    monkeypatch.setattr(
+        coletor_youtube,
+        "urlopen",
+        lambda url, timeout=10: _RespostaJSONFake({"items": threads}),
+    )
+
+
+def test_comentario_do_dono_preenche_o_jogo_no_csv(monkeypatch, tmp_path):
+    _patch_api_com_threads(
+        monkeypatch,
+        [_thread("Qual o nome do jogo?", CANAL_TERCEIRO_A, [("lava and aqua", CANAL_DONO)])],
+    )
+    destino = tmp_path / "meus_videos.csv"
+
+    analisar_meu_canal(CANAL_DONO, _jogos(), destino, limite=2, limite_comentarios=10)
+
+    linha = {l["video_id"]: l for l in _ler_linhas(destino)}["VID1"]
+    assert linha["jogo_detectado"] == "lava and aqua"
+    assert linha["confianca_jogo"] == "alta"
+    assert linha["fonte_deteccao"] == "comentario_dono"
+    assert linha["jogo_no_seed"] == "nao"
+    assert linha["status_analise"] == "jogo_pendente_seed"
+
+
+def test_resposta_de_terceiro_sozinha_nao_vira_jogo(monkeypatch, tmp_path):
+    _patch_api_com_threads(
+        monkeypatch,
+        [_thread("Qual o nome do jogo?", CANAL_TERCEIRO_A, [("Kid bengala 2", CANAL_TERCEIRO_B)])],
+    )
+    destino = tmp_path / "meus_videos.csv"
+
+    analisar_meu_canal(CANAL_DONO, _jogos(), destino, limite=2, limite_comentarios=10)
+
+    linha = {l["video_id"]: l for l in _ler_linhas(destino)}["VID1"]
+    assert linha["jogo_detectado"] == ""
+    assert linha["fonte_deteccao"] == "nao_detectado"
+
+
+def test_dois_terceiros_independentes_corroboram_no_fluxo_completo(monkeypatch, tmp_path):
+    _patch_api_com_threads(
+        monkeypatch,
+        [
+            _thread(
+                "Qual o nome do jogo?",
+                CANAL_TERCEIRO_A,
+                [("lava and aqua", CANAL_TERCEIRO_A), ("lava and aqua", CANAL_TERCEIRO_B)],
+            )
+        ],
+    )
+    destino = tmp_path / "meus_videos.csv"
+
+    analisar_meu_canal(CANAL_DONO, _jogos(), destino, limite=2, limite_comentarios=10)
+
+    linha = {l["video_id"]: l for l in _ler_linhas(destino)}["VID1"]
+    assert linha["jogo_detectado"] == "lava and aqua"
+    assert linha["fonte_deteccao"] == "comentario_corroborado"
+    assert linha["confianca_jogo"] == "baixa"
+
+
+# A regra de privacidade do projeto por escrito: o id do autor entra na coleta, decide o
+# booleano "e do dono" e morre ali. Nenhum id pode aparecer no CSV, nem o do dono.
+def test_csv_nao_guarda_id_de_autor_de_comentario(monkeypatch, tmp_path):
+    _patch_api_com_threads(
+        monkeypatch,
+        [_thread("Qual o nome do jogo?", CANAL_TERCEIRO_A, [("lava and aqua", CANAL_DONO)])],
+    )
+    destino = tmp_path / "meus_videos.csv"
+
+    analisar_meu_canal(CANAL_DONO, _jogos(), destino, limite=2, limite_comentarios=10)
+
+    conteudo = destino.read_text(encoding="utf-8")
+    assert CANAL_TERCEIRO_A not in conteudo
+    assert CANAL_DONO not in conteudo

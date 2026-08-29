@@ -53,12 +53,31 @@ class DetalheVideoYoutube:
     tipo_video: str
 
 
+# Um comentario ja classificado no momento da coleta, para a deteccao decidir o quanto
+# confiar nele. Guarda de PROPOSITO apenas o texto e sinais nao identificaveis, seguindo a
+# mesma regra de privacidade do coletar_textos_comentarios: nenhum authorChannelId, nome,
+# handle ou foto de terceiro entra aqui, e portanto nenhum deles pode vazar para CSV/log.
+#
+# do_dono: o autor e o dono do canal (authorChannelId == MEU_CANAL_YOUTUBE_ID).
+# responde_pergunta_de_jogo: o comentario do topo desta thread perguntava o nome do jogo.
+# autor_indice: numero sequencial valido SO dentro deste video, atribuido na ordem em que
+#   os autores aparecem. Existe unicamente para contar corroboracao ("duas pessoas
+#   diferentes disseram o mesmo nome") sem carregar identidade nenhuma; -1 = desconhecido.
+@dataclass
+class ComentarioAnalisado:
+    texto: str
+    do_dono: bool = False
+    responde_pergunta_de_jogo: bool = False
+    autor_indice: int = -1
+
+
 @dataclass
 class ComentariosColetados:
     textos: list[str] = field(default_factory=list)
     comentarios_principais: int = 0
     respostas: int = 0
     incompleto: bool = False
+    analisados: list[ComentarioAnalisado] = field(default_factory=list)
 
 
 # Um video do meu proprio canal, ja com o jogo detectado e as metricas reais.

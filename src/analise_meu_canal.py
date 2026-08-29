@@ -64,7 +64,7 @@ def analisar_meu_canal(
 
         resumo["analisados"] += 1
         deteccao, _por_comentarios, comentarios = _detectar_com_estrategia(
-            detalhe, jogos, limite_comentarios, comentarios_extra_sem_jogo
+            detalhe, jogos, limite_comentarios, comentarios_extra_sem_jogo, channel_id
         )
         if not deteccao.detectou:
             resumo["jogos_nao_detectados"] += 1
@@ -125,7 +125,7 @@ def analisar_canal_completo(
         for detalhe in detalhes:
             resumo["analisados"] += 1
             deteccao, por_comentarios, comentarios = _detectar_com_estrategia(
-                detalhe, jogos, limite_comentarios, comentarios_extra_sem_jogo
+                detalhe, jogos, limite_comentarios, comentarios_extra_sem_jogo, channel_id
             )
             if not deteccao.detectou:
                 resumo["sem_jogo"] += 1
@@ -152,6 +152,7 @@ def _detectar_com_estrategia(
     jogos: list[JogoSeed],
     limite_comentarios: int,
     comentarios_extra_sem_jogo: int,
+    channel_id_dono: str | None = None,
 ) -> tuple[DeteccaoJogo, bool, ComentariosColetados]:
     comentarios = ComentariosColetados()
     deteccao = detectar_jogo_em_conteudo(
@@ -160,31 +161,42 @@ def _detectar_com_estrategia(
     if deteccao.detectou:
         return deteccao, False, comentarios
 
-    if limite_comentarios > 0:
-        comentarios = _coletar_comentarios_seguro(detalhe.video_id, limite_comentarios)
-        deteccao = detectar_jogo_em_conteudo(
-            jogos,
-            titulo=detalhe.titulo,
-            descricao=detalhe.descricao,
-            tags=detalhe.tags,
-            comentarios=comentarios.textos,
-        )
-        if deteccao.detectou:
-            return deteccao, True, comentarios
-
-    if comentarios_extra_sem_jogo > limite_comentarios:
-        comentarios = _coletar_comentarios_seguro(detalhe.video_id, comentarios_extra_sem_jogo)
-        deteccao = detectar_jogo_em_conteudo(
-            jogos,
-            titulo=detalhe.titulo,
-            descricao=detalhe.descricao,
-            tags=detalhe.tags,
-            comentarios=comentarios.textos,
-        )
+    for limite in _limites_de_comentarios(limite_comentarios, comentarios_extra_sem_jogo):
+        comentarios = _coletar_comentarios_seguro(detalhe.video_id, limite, channel_id_dono)
+        deteccao = _detectar_com_comentarios(detalhe, jogos, comentarios)
         if deteccao.detectou:
             return deteccao, True, comentarios
 
     return deteccao, False, comentarios
+
+
+# As duas rodadas de comentarios (limite normal e, se ainda faltar jogo, o extra) so diferem
+# no tamanho da busca. Descrever isso como uma lista de limites evita repetir o mesmo bloco
+# de deteccao duas vezes — era duplicacao que ja existia e que agora custaria caro, porque
+# cada copia teria de lembrar de repassar tambem os comentarios analisados.
+def _limites_de_comentarios(limite_comentarios: int, comentarios_extra_sem_jogo: int) -> list[int]:
+    limites = []
+    if limite_comentarios > 0:
+        limites.append(limite_comentarios)
+    if comentarios_extra_sem_jogo > limite_comentarios:
+        limites.append(comentarios_extra_sem_jogo)
+    return limites
+
+
+# Repassa os comentarios ja classificados (dono/pergunta/autor) junto com os textos crus: os
+# textos alimentam a busca por alias do seed e os analisados alimentam as fontes novas
+# (comentario_dono e comentario_corroborado).
+def _detectar_com_comentarios(
+    detalhe: DetalheVideoYoutube, jogos: list[JogoSeed], comentarios: ComentariosColetados
+) -> DeteccaoJogo:
+    return detectar_jogo_em_conteudo(
+        jogos,
+        titulo=detalhe.titulo,
+        descricao=detalhe.descricao,
+        tags=detalhe.tags,
+        comentarios=comentarios.textos,
+        comentarios_analisados=comentarios.analisados,
+    )
 
 
 # Busca o detalhe do video; erro de API ou video sumido vira None, sem derrubar o lote.
@@ -213,9 +225,11 @@ def _coletar_detalhes_lote_seguro(video_ids: list[str]) -> list[DetalheVideoYout
 
 # Comentarios sao sinal secundario: qualquer erro de API degrada para lista vazia, para
 # nao perder o video (titulo, descricao e tags ainda permitem detectar o jogo).
-def _coletar_comentarios_seguro(video_id: str, limite: int) -> ComentariosColetados:
+def _coletar_comentarios_seguro(
+    video_id: str, limite: int, channel_id_dono: str | None = None
+) -> ComentariosColetados:
     try:
-        return coletar_textos_comentarios(video_id, limite)
+        return coletar_textos_comentarios(video_id, limite, channel_id_dono=channel_id_dono)
     except RuntimeError as erro:
         _avisar_erro_coleta(video_id, "comentarios", erro)
         return ComentariosColetados(incompleto=True)

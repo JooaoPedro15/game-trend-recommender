@@ -20,6 +20,7 @@ from coletor_youtube import (
     coletar_detalhe_video,
     coletar_detalhes_do_canal,
     coletar_detalhes_em_lote,
+    coletar_textos_comentarios,
     coletar_video_por_id,
     coletar_videos_por_ids,
     listar_ids_recentes_do_canal,
@@ -717,3 +718,109 @@ def test_falha_de_rede_nos_comentarios_vira_runtime_error(monkeypatch):
 
     with pytest.raises(RuntimeError, match="Falha de rede"):
         coletar_comentarios("VID123")
+
+
+# ---------------------------------------------------------------------------
+# Classificacao dos comentarios na coleta (dono / pergunta / autor anonimo).
+# ---------------------------------------------------------------------------
+
+
+# prefixo mantem os ids de resposta unicos entre threads: ids repetidos sao descartados
+# pela deduplicacao da coleta, e o teste mediria o dedupe em vez do que quer medir.
+def _thread_com_autores(topo, autor_topo, respostas, prefixo="T1"):
+    return {
+        "snippet": {
+            "totalReplyCount": len(respostas),
+            "topLevelComment": {
+                "id": f"C{prefixo}",
+                "snippet": {"textDisplay": topo, "authorChannelId": {"value": autor_topo}},
+            },
+        },
+        "replies": {
+            "comments": [
+                {
+                    "id": f"R{prefixo}_{indice}",
+                    "snippet": {"textDisplay": texto, "authorChannelId": {"value": autor}},
+                }
+                for indice, (texto, autor) in enumerate(respostas)
+            ]
+        },
+    }
+
+
+def _patch_threads(monkeypatch, threads):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(
+        coletor_youtube, "urlopen", lambda url, timeout=10: _RespostaFake({"items": threads})
+    )
+
+
+def test_coleta_marca_o_comentario_do_dono(monkeypatch):
+    _patch_threads(
+        monkeypatch,
+        [_thread_com_autores("Nome do jogo?", "UC_A", [("lava and aqua", "UC_DONO")])],
+    )
+
+    coleta = coletar_textos_comentarios("VID", 50, channel_id_dono="UC_DONO")
+
+    assert [c.do_dono for c in coleta.analisados] == [False, True]
+
+
+def test_coleta_marca_resposta_dentro_de_thread_que_pergunta_o_jogo(monkeypatch):
+    _patch_threads(
+        monkeypatch,
+        [
+            _thread_com_autores("Nome do jogo?", "UC_A", [("lava and aqua", "UC_DONO")], "T1"),
+            _thread_com_autores("Video muito bom", "UC_B", [("valeu", "UC_DONO")], "T2"),
+        ],
+    )
+
+    coleta = coletar_textos_comentarios("VID", 50, channel_id_dono="UC_DONO")
+
+    # O comentario do topo nunca responde a si mesmo; so as respostas herdam a pergunta.
+    assert [c.responde_pergunta_de_jogo for c in coleta.analisados] == [False, True, False, False]
+
+
+def test_coleta_da_indices_diferentes_a_autores_diferentes(monkeypatch):
+    _patch_threads(
+        monkeypatch,
+        [
+            _thread_com_autores(
+                "Nome do jogo?",
+                "UC_A",
+                [("lava and aqua", "UC_B"), ("lava and aqua", "UC_C"), ("isso ai", "UC_B")],
+            )
+        ],
+    )
+
+    coleta = coletar_textos_comentarios("VID", 50, channel_id_dono="UC_DONO")
+    indices = [c.autor_indice for c in coleta.analisados]
+
+    # UC_A, UC_B, UC_C, UC_B -> o mesmo autor recebe sempre o mesmo indice.
+    assert indices == [0, 1, 2, 1]
+
+
+# Sem o id do dono nao ha como marcar ninguem como dono, e a coleta segue funcionando.
+def test_coleta_sem_id_do_dono_nao_marca_ninguem(monkeypatch):
+    _patch_threads(
+        monkeypatch,
+        [_thread_com_autores("Nome do jogo?", "UC_A", [("lava and aqua", "UC_DONO")])],
+    )
+
+    coleta = coletar_textos_comentarios("VID", 50)
+
+    assert [c.do_dono for c in coleta.analisados] == [False, False]
+
+
+# O objeto devolvido pela coleta nao pode carregar o id do autor para fora.
+def test_comentario_analisado_nao_carrega_id_de_autor(monkeypatch):
+    _patch_threads(
+        monkeypatch,
+        [_thread_com_autores("Nome do jogo?", "UC_A", [("lava and aqua", "UC_DONO")])],
+    )
+
+    coleta = coletar_textos_comentarios("VID", 50, channel_id_dono="UC_DONO")
+
+    campos = vars(coleta.analisados[0])
+    assert "UC_A" not in str(campos.values())
+    assert set(campos) == {"texto", "do_dono", "responde_pergunta_de_jogo", "autor_indice"}

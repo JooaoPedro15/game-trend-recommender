@@ -726,7 +726,9 @@ def diagnosticar_meu_video_interativo(video_id: str) -> None:
         return
 
     try:
-        comentarios = coletar_textos_comentarios(video_id, 50)
+        comentarios = coletar_textos_comentarios(
+            video_id, 50, channel_id_dono=ler_id_canal_proprio()
+        )
     except RuntimeError as erro:
         print(
             f"AVISO: video {video_id}: operacao comentarios falhou ({erro}). "
@@ -740,6 +742,7 @@ def diagnosticar_meu_video_interativo(video_id: str) -> None:
         descricao=detalhe.descricao,
         tags=detalhe.tags,
         comentarios=comentarios.textos,
+        comentarios_analisados=comentarios.analisados,
     )
 
     print("=== Diagnostico do Meu Video ===")
@@ -755,6 +758,15 @@ def diagnosticar_meu_video_interativo(video_id: str) -> None:
         f"{comentarios.comentarios_principais} principais, {comentarios.respostas} respostas"
     )
     print(f"Comentarios incompletos: {'sim' if comentarios.incompleto else 'nao'}")
+    # Os dois sinais que a deteccao por comentario usa. Sem eles, um video sem jogo parece
+    # sempre o mesmo caso; com eles da para ver se faltou o dono responder ou faltou alguem
+    # perguntar. Contagens, nunca quem escreveu.
+    print(
+        "Comentarios do dono: "
+        f"{sum(1 for c in comentarios.analisados if c.do_dono)} | "
+        "em thread que pergunta o jogo: "
+        f"{sum(1 for c in comentarios.analisados if c.responde_pergunta_de_jogo)}"
+    )
     print(f"Jogo detectado: {deteccao.jogo_detectado or '(nenhum)'}")
     print(f"Fonte da deteccao: {deteccao.fonte}")
     print(f"Confianca: {deteccao.confianca}")
