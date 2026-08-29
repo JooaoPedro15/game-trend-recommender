@@ -11,7 +11,11 @@ from modelos import ComentarioAnalisado, JogoSeed, VideoColetado
 
 
 class TestDetectorJogo(unittest.TestCase):
-    def test_detecta_jogo_por_alias_nos_comentarios(self):
+    # Antes, um alias solto nos comentarios bastava para detectar o jogo. Amostra real de
+    # canais de referencia mostrou comentario como sinal fraco (curiosidade, nao
+    # identificacao) e fonte de falso positivo; a deteccao passou a ler so titulo, descricao
+    # e tags. Aqui o nome so aparece no comentario, entao nao deve mais ser encontrado.
+    def test_jogo_citado_so_nos_comentarios_nao_e_detectado(self):
         jogo = JogoSeed(
             nome="R.E.P.O.",
             aliases=["repo", "r.e.p.o", "repo game"],
@@ -32,7 +36,7 @@ class TestDetectorJogo(unittest.TestCase):
 
         encontrados = detectar_jogos_no_video(video, [jogo])
 
-        self.assertEqual([j.nome for j in encontrados], ["R.E.P.O."])
+        self.assertEqual(encontrados, [])
 
     def test_detecta_jogo_pelo_nome_principal_no_titulo(self):
         jogo = JogoSeed(
@@ -57,7 +61,10 @@ class TestDetectorJogo(unittest.TestCase):
 
         self.assertEqual([j.nome for j in encontrados], ["Content Warning"])
 
-def test_detecta_jogo_pelo_texto_dos_comentarios():
+# Mesma mudanca de contrato do teste acima: comentario deixou de ser fonte da deteccao
+# de video de referencia. O nome so aparece na pergunta do comentario, entao o jogo nao
+# deve mais ser encontrado.
+def test_jogo_citado_so_na_pergunta_do_comentario_nao_e_detectado():
     jogo = JogoSeed(
         nome="Schedule I",
         aliases=["schedule 1", "schedule one"],
@@ -79,7 +86,7 @@ def test_detecta_jogo_pelo_texto_dos_comentarios():
 
     resultado = detectar_jogos_no_video(video, [jogo])
 
-    assert resultado == [jogo]
+    assert resultado == []
 
 
 def _jogos_exemplo():
@@ -581,3 +588,65 @@ def test_rotulo_vazio_deixa_o_comentario_do_dono_detectar():
 
     assert deteccao.jogo_detectado == "lava and aqua"
     assert deteccao.fonte == "comentario_dono"
+
+
+# --- Deteccao de video de referencia usa so texto do autor ---
+#
+# Amostra real de dois canais de referencia: 400 comentarios, 5 perguntas pelo nome do
+# jogo, ZERO respostas. Comentario ali carrega curiosidade, nao identificacao. E incluir
+# comentario liga um falso positivo conhecido: um alias solto em 100 comentarios de um
+# video sobre "a evolucao das logos do facebook e do youtube" resolvia como Roblox.
+
+def _video_referencia(titulo="", descricao="", tags=None, comentarios=""):
+    video = VideoColetado(
+        titulo=titulo,
+        canal="Lozao",
+        plataforma="youtube",
+        url="https://y/1",
+        views=1000,
+        likes=10,
+        comentarios=5,
+        data_publicacao="2026-08-01",
+        texto_comentarios=comentarios,
+    )
+    video.descricao = descricao
+    video.tags = tags or []
+    return video
+
+
+def test_detecta_jogo_citado_na_descricao():
+    achados = detectar_jogos_no_video(
+        _video_referencia(titulo="MEU BARCO NAUFRAGO", descricao="nesse video eu trouxe Roblox"),
+        _seed_com_alias_curto(),
+    )
+
+    assert [j.nome for j in achados] == ["Roblox"]
+
+
+def test_detecta_jogo_citado_nas_tags():
+    achados = detectar_jogos_no_video(
+        _video_referencia(titulo="sem pista", tags=["gameplay", "roblox"]),
+        _seed_com_alias_curto(),
+    )
+
+    assert [j.nome for j in achados] == ["Roblox"]
+
+
+def test_alias_solto_em_comentario_nao_detecta_mais():
+    achados = detectar_jogos_no_video(
+        _video_referencia(
+            titulo="A evolucao das logos do facebook e do youtube",
+            comentarios="alguem ai joga roblox? eu jogo minecraft todo dia",
+        ),
+        _seed_com_alias_curto(),
+    )
+
+    assert achados == []
+
+
+def test_texto_comentarios_continua_no_modelo():
+    # A descoberta depende desse campo; so a deteccao parou de le-lo. Remover o campo
+    # quebraria o score_descoberta, que e o proximo passo do plano.
+    video = _video_referencia(comentarios="qual o nome do jogo")
+
+    assert video.texto_comentarios == "qual o nome do jogo"

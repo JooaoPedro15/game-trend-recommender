@@ -55,7 +55,7 @@ class TestRanker(unittest.TestCase):
         ]
         videos = [
             VideoColetado(
-                titulo="Esse jogo de terror me quebrou",
+                titulo="Esse jogo de terror me quebrou, repo muito bom",
                 canal="Canal Referencia 1",
                 plataforma="youtube",
                 url="https://exemplo.com/video1",
@@ -66,7 +66,7 @@ class TestRanker(unittest.TestCase):
                 texto_comentarios="qual nome do jogo? repo muito bom",
             ),
             VideoColetado(
-                titulo="Minecraft mas tudo explode",
+                titulo="Minecraft mas tudo explode, minecraft de novo",
                 canal="Canal Referencia 2",
                 plataforma="tiktok",
                 url="https://exemplo.com/video2",
@@ -201,7 +201,7 @@ class TestRanker(unittest.TestCase):
             fit_inicial=9,
         )
         video = VideoColetado(
-            titulo="Esse jogo de terror me quebrou",
+            titulo="Esse jogo de terror me quebrou, repo",
             canal="Core",
             plataforma="youtube",
             url="https://youtube.com/shorts/exemplo",

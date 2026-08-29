@@ -63,10 +63,16 @@ MINIMO_CORROBORACAO = 2
 CORROBORACAO_PARA_MEDIA = 3
 
 
+# Todos os jogos do seed citados no texto que o AUTOR escreveu: titulo, descricao e tags.
+# Comentario fica de fora de proposito. Em amostra real de canais de referencia, 400
+# comentarios trouxeram 5 perguntas pelo nome do jogo e nenhuma resposta — ali o comentario
+# mede curiosidade, nao identidade. E le-lo reintroduz falso positivo: basta um alias solto
+# numa conversa qualquer para o video inteiro ser atribuido ao jogo errado.
+# O texto_comentarios continua no modelo; quem o consome agora e so o score de descoberta.
 def detectar_jogos_no_video(
     video: VideoColetado, jogos: list[JogoSeed]
 ) -> list[JogoSeed]:
-    texto_busca = f"{video.titulo} {video.texto_comentarios}"
+    texto_busca = f"{video.titulo} {video.descricao} {' '.join(video.tags)}"
     encontrados = []
 
     for jogo in jogos:
