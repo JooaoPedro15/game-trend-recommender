@@ -1034,3 +1034,110 @@ def test_sem_forcar_a_linha_existente_conta_como_duplicada(monkeypatch, tmp_path
 
     assert resumo["duplicados"] == 1
     assert resumo["salvos"] == 1
+
+
+# --- Comentario de referencia: alimenta descoberta, nao identificacao ---
+#
+# Coletado em TODOS os videos, nao so nos sem jogo: descoberta mede hype, e jogo
+# identificado tambem tem hype. Restringir daria descoberta zero justamente aos jogos que o
+# sistema conhece. Custo: 1 unidade de quota por video.
+
+class _RespostaComentarios:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self):
+        return json.dumps(
+            {
+                "items": [
+                    {"snippet": {"topLevelComment": {"snippet": {"textDisplay": t}}}}
+                    for t in ["qual o nome do jogo", "muito bom"]
+                ]
+            }
+        )
+
+
+def test_coletar_canal_guarda_comentario_para_descoberta(monkeypatch, tmp_path):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_canal_em_lote([]))
+    monkeypatch.setattr(
+        coletor_youtube, "urlopen", lambda url, timeout=10: _RespostaComentarios()
+    )
+    destino = tmp_path / "videos_coletados.csv"
+
+    coletor_youtube.coletar_canal(
+        "UC_X", destino, limite=2, caminho_cache=None, limite_comentarios=10
+    )
+
+    primeiro = ler_videos_coletados(destino)[0]
+    assert "qual o nome do jogo" in primeiro.texto_comentarios
+
+
+def test_limite_de_comentarios_zero_nao_chama_a_api(monkeypatch, tmp_path):
+    chamou = []
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_canal_em_lote([]))
+    monkeypatch.setattr(
+        coletor_youtube,
+        "urlopen",
+        lambda url, timeout=10: chamou.append(url) or _RespostaComentarios(),
+    )
+    destino = tmp_path / "videos_coletados.csv"
+
+    coletor_youtube.coletar_canal(
+        "UC_X", destino, limite=2, caminho_cache=None, limite_comentarios=0
+    )
+
+    assert chamou == []
+    assert ler_videos_coletados(destino)[0].texto_comentarios == ""
+
+
+def test_falha_de_comentario_nao_derruba_o_video(monkeypatch, tmp_path):
+    # Comentario e sinal secundario: perder o video inteiro por causa dele seria pior que
+    # ficar sem descoberta naquele video.
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_canal_em_lote([]))
+
+    def _explode(url, timeout=10):
+        raise TimeoutError("tempo esgotado")
+
+    monkeypatch.setattr(coletor_youtube, "urlopen", _explode)
+    destino = tmp_path / "videos_coletados.csv"
+
+    resumo = coletor_youtube.coletar_canal(
+        "UC_X", destino, limite=2, caminho_cache=None, limite_comentarios=10
+    )
+
+    assert resumo["salvos"] == 2
+    assert ler_videos_coletados(destino)[0].texto_comentarios == ""
+
+
+def test_comentario_coletado_liga_o_score_de_descoberta(monkeypatch, tmp_path):
+    # O objetivo final desta tarefa. score_descoberta vale 15% do score final e hoje le 0.0
+    # para todo jogo. Sem esta afirmacao, a coleta pode funcionar e a descoberta continuar
+    # desligada sem ninguem perceber.
+    from modelos import CanalReferencia, JogoSeed
+    from ranker import calcular_ranking
+
+    monkeypatch.setenv("YOUTUBE_API_KEY", "CHAVE_FAKE")
+    monkeypatch.setattr(coletor_youtube, "_get_json", _fake_canal_em_lote([]))
+    monkeypatch.setattr(
+        coletor_youtube, "urlopen", lambda url, timeout=10: _RespostaComentarios()
+    )
+    destino = tmp_path / "videos_coletados.csv"
+
+    coletor_youtube.coletar_canal(
+        "UC_X", destino, limite=2, caminho_cache=None, limite_comentarios=10
+    )
+
+    # O fake escreve "nesse video eu trouxe o jogo VID0" na descricao, entao um seed com
+    # esse termo faz o video entrar no ranking e levar a descoberta junto.
+    jogos = [JogoSeed(nome="VID0", aliases=["vid0"], genero="", fit_inicial=5.0)]
+    canais = [CanalReferencia(nome="Lozao", plataforma="youtube", url="https://y/c", peso=1.0)]
+    ranking = calcular_ranking(jogos, ler_videos_coletados(destino), canais, [])
+
+    assert ranking
+    assert ranking[0].score_descoberta > 0

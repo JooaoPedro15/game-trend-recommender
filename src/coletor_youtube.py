@@ -411,27 +411,30 @@ def coletar_videos_por_ids(
     return _coletar_e_salvar(ler_ids_de_arquivo(caminho_ids), caminho_destino, caminho_cache)
 
 
-# Coleta os videos recentes de um canal e salva cada um no CSV. Usa videos.list em LOTE:
-# uma chamada cobre ate 50 videos, contra uma chamada por video do caminho antigo. O cache
-# por id nao entra aqui de proposito — ele economizava 1 unidade por video, e no lote o
-# video inteiro ja custa 1/50 de unidade. O parametro segue na assinatura por
-# compatibilidade com quem ja chama.
+# Coleta os videos recentes de um canal e salva cada um no CSV. videos.list vai em LOTE
+# (1 unidade por 50). limite_comentarios > 0 busca tambem os comentarios, que aqui servem a
+# UM proposito so: alimentar o score de descoberta ("gente perguntando que jogo e esse").
+# A deteccao nao le esse campo — ver detectar_jogos_no_video. Custo: 1 unidade por video.
 def coletar_canal(
     channel_id: str,
     caminho_destino: str | Path,
     limite: int = 5,
     caminho_cache: str | Path | None = CACHE_PADRAO,
     forcar: bool = False,
+    limite_comentarios: int = 0,
 ) -> dict[str, int]:
     ids = listar_ids_recentes_do_canal(channel_id, limite)
     resumo = {"lidos": len(ids), "encontrados": 0, "salvos": 0, "duplicados": 0, "erros": 0}
 
     for detalhe in coletar_detalhes_em_lote_varios(ids):
         resumo["encontrados"] += 1
-        try:
-            adicionar_video_csv(
-                caminho_destino, detalhe_para_video_coletado(detalhe), substituir=forcar
+        video = detalhe_para_video_coletado(detalhe)
+        if limite_comentarios > 0:
+            video.texto_comentarios = " ".join(
+                _comentarios_de_referencia(detalhe.video_id, limite_comentarios)
             )
+        try:
+            adicionar_video_csv(caminho_destino, video, substituir=forcar)
             resumo["salvos"] += 1
         except VideoDuplicadoError:
             resumo["duplicados"] += 1
@@ -441,6 +444,17 @@ def coletar_canal(
     # Video pedido e nao devolvido pela API (apagado/privado) conta como erro.
     resumo["erros"] += len(ids) - resumo["encontrados"]
     return resumo
+
+
+# Comentario e sinal secundario aqui: qualquer erro de API degrada para lista vazia, para
+# nao perder o video. limite_respostas baixo de proposito — medicao mostrou que o padrao 20
+# dispara cerca de 3 chamadas extras de comments.list por video sem trazer sinal novo, e
+# resposta de thread nao e onde a pergunta "que jogo e esse" aparece.
+def _comentarios_de_referencia(video_id: str, limite: int) -> list[str]:
+    try:
+        return coletar_textos_comentarios(video_id, limite, limite_respostas=5).textos
+    except RuntimeError:
+        return []
 
 
 # Para cada video recente do canal, busca os detalhes ricos e devolve a lista de
