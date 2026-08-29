@@ -8,6 +8,7 @@
 import json
 import re
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from socket import timeout as SocketTimeout
 from urllib.error import HTTPError, URLError
@@ -16,8 +17,14 @@ from urllib.request import urlopen
 
 from cache_youtube import CACHE_PATH as CACHE_PADRAO, buscar_no_cache, salvar_no_cache
 from cadastro_video import VideoDuplicadoError, adicionar_video_csv
+from comentario_jogo import pergunta_nome_do_jogo
 from config import ler_chave_youtube
-from modelos import ComentariosColetados, DetalheVideoYoutube, VideoColetado
+from modelos import (
+    ComentarioAnalisado,
+    ComentariosColetados,
+    DetalheVideoYoutube,
+    VideoColetado,
+)
 
 
 API_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
@@ -448,10 +455,25 @@ def _ler_json_comentarios(url: str):
 
 # Coleta textos de comentarios principais e respostas de um video. Nao guarda nenhum dado
 # pessoal (autor, canal, foto) — so texto e contagens uteis para diagnostico.
+#
+# channel_id_dono (opcional) liga a classificacao usada pela deteccao por comentario: o
+# authorChannelId que a API manda no snippet e comparado com ele e o resultado vira um
+# BOOLEANO. O id do terceiro e lido, usado e descartado dentro desta funcao — o que sai daqui
+# em ComentarioAnalisado e so texto, booleanos e um indice sequencial local ao video. Essa e
+# a razao de a classificacao morar na coleta e nao no detector: o unico ponto do sistema que
+# pode ver o id do autor e este, e ele nao deixa o id escapar.
+#
+# ordem="relevance" (o padrao da API e "time") porque o limite corta os comentarios: pegando
+# os mais relevantes, a pergunta "Nome do jogo?" muito curtida — e a resposta do dono nela —
+# entram na fatia coletada, enquanto por data cairiam os comentarios mais novos, que
+# costumam ser reacoes soltas. Nao muda o custo: commentThreads custa 1 unidade por chamada
+# seja qual for a ordem. Como bonus, o resultado deixa de mudar a cada comentario novo.
 def coletar_textos_comentarios(
     video_id: str,
     limite: int = 50,
     limite_respostas: int = 20,
+    channel_id_dono: str | None = None,
+    ordem: str = "relevance",
 ) -> ComentariosColetados:
     if limite <= 0:
         return ComentariosColetados()
@@ -463,6 +485,7 @@ def coletar_textos_comentarios(
             "videoId": video_id,
             "maxResults": min(limite, 100),
             "textFormat": "plainText",
+            "order": ordem,
             "key": chave,
         }
     )
@@ -477,8 +500,7 @@ def coletar_textos_comentarios(
         ) from erro
 
     coleta = ComentariosColetados()
-    ids_respostas_vistos: set[str] = set()
-    textos_respostas_vistos: set[str] = set()
+    contexto = _ContextoAutoria(channel_id_dono)
 
     for item in dados.get("items", []):
         if len(coleta.textos) >= limite:
@@ -488,17 +510,22 @@ def coletar_textos_comentarios(
         snippet_thread = item.get("snippet", {})
         comentario_topo = snippet_thread.get("topLevelComment", {})
         respostas_antes_thread = coleta.respostas
-        texto_topo = comentario_topo.get("snippet", {}).get("textDisplay", "")
+        snippet_topo = comentario_topo.get("snippet", {})
+        texto_topo = snippet_topo.get("textDisplay", "")
         if texto_topo:
             coleta.textos.append(texto_topo)
             coleta.comentarios_principais += 1
+            coleta.analisados.append(contexto.analisar(snippet_topo, False))
 
+        # A pergunta do topo e o que autoriza ler uma resposta seca ("lava and aqua") como
+        # nome de jogo, entao ela e calculada uma vez e vale para a thread inteira.
+        pergunta = pergunta_nome_do_jogo(texto_topo)
         respostas_embutidas = item.get("replies", {}).get("comments", [])
         for resposta in respostas_embutidas:
             if len(coleta.textos) >= limite:
                 coleta.incompleto = True
                 break
-            _adicionar_resposta(coleta, resposta, ids_respostas_vistos, textos_respostas_vistos)
+            _adicionar_resposta(coleta, resposta, contexto, pergunta)
 
         total_respostas = int(snippet_thread.get("totalReplyCount", 0) or 0)
         if (
@@ -511,8 +538,8 @@ def coletar_textos_comentarios(
                 video_id,
                 chave,
                 coleta,
-                ids_respostas_vistos,
-                textos_respostas_vistos,
+                contexto,
+                pergunta,
                 limite,
                 limite_respostas - len(respostas_embutidas),
             )
@@ -529,26 +556,61 @@ def coletar_comentarios(video_id: str, limite: int = 50) -> list[str]:
     return coletar_textos_comentarios(video_id, limite).textos
 
 
+# Estado da coleta de UM video: o que ja foi visto (para nao duplicar resposta) e a traducao
+# de autor para um indice anonimo.
+#
+# A barreira de privacidade do projeto mora aqui. O authorChannelId entra nesta classe,
+# vira um booleano ("e o dono?") e um inteiro sequencial local ao video, e some — nao e
+# guardado em atributo, nao volta para quem chamou e nao chega perto de CSV, log ou cache.
+# O indice existe porque a corroboracao precisa distinguir "duas pessoas disseram o mesmo
+# nome" de "uma pessoa disse tres vezes", e para isso basta saber que sao autores
+# diferentes; nao e preciso saber QUEM sao.
+@dataclass
+class _ContextoAutoria:
+    channel_id_dono: str | None = None
+    ids_vistos: set[str] = field(default_factory=set)
+    textos_vistos: set[str] = field(default_factory=set)
+    _indices: dict[str, int] = field(default_factory=dict)
+
+    def analisar(self, snippet: dict, responde_pergunta: bool) -> ComentarioAnalisado:
+        autor = snippet.get("authorChannelId", {}).get("value", "")
+        return ComentarioAnalisado(
+            texto=snippet.get("textDisplay", ""),
+            do_dono=bool(self.channel_id_dono) and autor == self.channel_id_dono,
+            responde_pergunta_de_jogo=responde_pergunta,
+            autor_indice=self._indice(autor),
+        )
+
+    # Autor sem id vira -1 ("desconhecido"), que a corroboracao trata como um unico autor:
+    # sem saber se sao pessoas diferentes, o certo e nao contar como confirmacao.
+    def _indice(self, autor: str) -> int:
+        if not autor:
+            return -1
+        return self._indices.setdefault(autor, len(self._indices))
+
+
 def _adicionar_resposta(
     coleta: ComentariosColetados,
     resposta: dict,
-    ids_vistos: set[str],
-    textos_vistos: set[str],
+    contexto: _ContextoAutoria,
+    responde_pergunta: bool,
 ) -> None:
     resposta_id = resposta.get("id", "")
-    texto = resposta.get("snippet", {}).get("textDisplay", "")
+    snippet = resposta.get("snippet", {})
+    texto = snippet.get("textDisplay", "")
     if not texto:
         return
-    if resposta_id and resposta_id in ids_vistos:
+    if resposta_id and resposta_id in contexto.ids_vistos:
         return
-    if not resposta_id and texto in textos_vistos:
+    if not resposta_id and texto in contexto.textos_vistos:
         return
 
     if resposta_id:
-        ids_vistos.add(resposta_id)
-    textos_vistos.add(texto)
+        contexto.ids_vistos.add(resposta_id)
+    contexto.textos_vistos.add(texto)
     coleta.textos.append(texto)
     coleta.respostas += 1
+    coleta.analisados.append(contexto.analisar(snippet, responde_pergunta))
 
 
 def _coletar_respostas_adicionais(
@@ -556,8 +618,8 @@ def _coletar_respostas_adicionais(
     video_id: str,
     chave: str,
     coleta: ComentariosColetados,
-    ids_vistos: set[str],
-    textos_vistos: set[str],
+    contexto: _ContextoAutoria,
+    responde_pergunta: bool,
     limite_total: int,
     limite_respostas: int,
 ) -> None:
@@ -594,7 +656,7 @@ def _coletar_respostas_adicionais(
             if len(coleta.textos) >= limite_total or coletadas >= limite_respostas:
                 coleta.incompleto = True
                 break
-            _adicionar_resposta(coleta, resposta, ids_vistos, textos_vistos)
+            _adicionar_resposta(coleta, resposta, contexto, responde_pergunta)
             if coleta.respostas > antes:
                 coletadas += 1
                 antes = coleta.respostas
