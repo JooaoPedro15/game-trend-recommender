@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 
-from leitor_csv import _ler_linhas, ler_videos_coletados, linha_para_video
+from leitor_csv import _ler_linhas, colunas_faltando, ler_videos_coletados, linha_para_video
 from modelos import VideoColetado
 
 
@@ -68,6 +68,29 @@ def importar_videos_csv(
             invalidos += 1
 
     return importados, duplicados, invalidos
+
+
+# Colunas do formato atual que faltam no videos_coletados.csv gravado.
+def colunas_faltando_videos(caminho: str | Path) -> list[str]:
+    return colunas_faltando(caminho, CAMPOS_VIDEO)
+
+
+# Reescreve o CSV com o cabecalho atual, preservando as linhas existentes e deixando as
+# colunas novas vazias. Devolve as colunas acrescentadas ([] quando ja estava em dia).
+# Nao inventa dado: descricao e tags so sao preenchidas por uma nova coleta.
+def migrar_videos_coletados(caminho: str | Path) -> list[str]:
+    caminho = Path(caminho)
+    faltando = colunas_faltando_videos(caminho)
+    if not faltando:
+        return []
+
+    linhas = _ler_linhas(caminho)
+    with caminho.open("w", encoding="utf-8", newline="") as arquivo:
+        escritor = csv.DictWriter(arquivo, fieldnames=CAMPOS_VIDEO, extrasaction="ignore")
+        escritor.writeheader()
+        escritor.writerows(linhas)
+
+    return faltando
 
 
 def _garantir_csv(caminho: Path) -> None:

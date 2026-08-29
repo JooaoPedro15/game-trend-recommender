@@ -89,3 +89,69 @@ def test_importa_detecta_duplicado_contra_destino_existente(tmp_path):
 
     assert (importados, duplicados, invalidos) == (1, 1, 0)
     assert [video.titulo for video in ler_videos_coletados(destino)] == ["Ja existe", "Novo"]
+
+
+# --- Migracao de cabecalho do videos_coletados.csv ---
+#
+# O DictReader nao devolve a chave de uma coluna ausente, entao o leitor cai no padrao e
+# "coletado antes da coluna existir" fica igual a "nao tem descricao". A migracao devolve a
+# capacidade de distinguir os dois casos; ela nao inventa dado nenhum.
+
+def test_colunas_faltando_aponta_as_colunas_novas(tmp_path):
+    from cadastro_video import colunas_faltando_videos
+
+    caminho = tmp_path / "videos_coletados.csv"
+    caminho.write_text(
+        "titulo,canal,plataforma,url,views,likes,comentarios,data_publicacao,"
+        "texto_comentarios,origem,tipo_video\n",
+        encoding="utf-8",
+    )
+
+    assert colunas_faltando_videos(caminho) == ["descricao", "tags"]
+
+
+def test_arquivo_em_dia_nao_reporta_coluna_faltando(tmp_path):
+    from cadastro_video import CAMPOS_VIDEO, colunas_faltando_videos
+
+    caminho = tmp_path / "videos_coletados.csv"
+    caminho.write_text(",".join(CAMPOS_VIDEO) + "\n", encoding="utf-8")
+
+    assert colunas_faltando_videos(caminho) == []
+
+
+def test_migrar_preserva_as_linhas_e_deixa_as_colunas_novas_vazias(tmp_path):
+    from cadastro_video import migrar_videos_coletados
+    from leitor_csv import ler_videos_coletados
+
+    caminho = tmp_path / "videos_coletados.csv"
+    caminho.write_text(
+        "titulo,canal,plataforma,url,views,likes,comentarios,data_publicacao,"
+        "texto_comentarios,origem,tipo_video\n"
+        "MEU BARCO,Lozao,youtube,https://y/1,90362,100,10,2026-08-01,,youtube,longo\n",
+        encoding="utf-8",
+    )
+
+    novas = migrar_videos_coletados(caminho)
+
+    assert novas == ["descricao", "tags"]
+    lido = ler_videos_coletados(caminho)[0]
+    assert lido.titulo == "MEU BARCO"
+    assert lido.views == 90362
+    assert lido.descricao == ""
+
+
+def test_migrar_arquivo_em_dia_nao_reescreve(tmp_path):
+    from cadastro_video import CAMPOS_VIDEO, migrar_videos_coletados
+
+    caminho = tmp_path / "videos_coletados.csv"
+    caminho.write_text(",".join(CAMPOS_VIDEO) + "\n", encoding="utf-8")
+    antes = caminho.read_text(encoding="utf-8")
+
+    assert migrar_videos_coletados(caminho) == []
+    assert caminho.read_text(encoding="utf-8") == antes
+
+
+def test_migrar_arquivo_inexistente_nao_quebra(tmp_path):
+    from cadastro_video import migrar_videos_coletados
+
+    assert migrar_videos_coletados(tmp_path / "nao_existe.csv") == []

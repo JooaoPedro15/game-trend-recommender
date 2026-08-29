@@ -80,3 +80,24 @@ def _para_int(valor: str | None, padrao: int) -> int:
     if valor is None or not valor.strip():
         return padrao
     return int(float(valor))
+
+
+# Le so o cabecalho gravado no arquivo (lista vazia se ele nao existe ou esta vazio).
+def cabecalho_do_csv(caminho: str | Path) -> list[str]:
+    caminho = Path(caminho)
+    if not caminho.exists() or caminho.stat().st_size == 0:
+        return []
+
+    with caminho.open("r", encoding="utf-8-sig", newline="") as arquivo:
+        return next(csv.reader(arquivo), [])
+
+
+# Colunas de `campos` que faltam no arquivo gravado, na ordem de `campos`. Generico de
+# proposito: o meus_videos.csv ja tinha essa checagem so para ele, e o mesmo problema vale
+# para qualquer CSV do projeto que ganhe coluna depois de ja ter linhas.
+def colunas_faltando(caminho: str | Path, campos: list[str]) -> list[str]:
+    cabecalho = cabecalho_do_csv(caminho)
+    if not cabecalho:
+        return []
+
+    return [campo for campo in campos if campo not in cabecalho]
