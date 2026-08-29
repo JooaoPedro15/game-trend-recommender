@@ -67,6 +67,7 @@ from evidencias_jogo import (
     resumir_evidencia_criadores,
 )
 from detector_jogo import detectar_jogo_em_conteudo
+from descobertas import descobertas_sem_jogo, imprimir_descobertas
 
 
 
@@ -133,6 +134,10 @@ def main(argv: list[str] | None = None) -> int:
         videos_sem_jogo_interativo()
         return 0
 
+    if comando == "descobertas_sem_jogo":
+        descobertas_sem_jogo_interativo()
+        return 0
+
     if comando == "adicionar_jogo":
         adicionar_jogo_interativo(nome, aliases, genero, fit)
         return 0
@@ -150,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if comando == "coletar_canal_youtube":
-        coletar_canal_youtube_interativo(channel_id, limite, forcar)
+        coletar_canal_youtube_interativo(channel_id, limite, forcar, comentarios)
         return 0
 
     if comando == "listar_meus_videos_youtube":
@@ -404,6 +409,15 @@ def videos_sem_jogo_interativo() -> None:
     videos = ler_videos_coletados(VIDEOS_CSV)
     jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
     imprimir_videos_sem_jogo(encontrar_videos_sem_jogo(videos, jogos))
+
+
+# Lista os videos de referencia que atrairam pergunta sobre o nome do jogo e continuam sem
+# jogo identificado. E a fila de trabalho humano: assistir, descobrir o nome e cadastrar com
+# adicionar_jogo. Nao toca a rede — le o que ja esta nos CSVs.
+def descobertas_sem_jogo_interativo() -> None:
+    videos = ler_videos_coletados(VIDEOS_CSV)
+    jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
+    imprimir_descobertas(descobertas_sem_jogo(videos, jogos))
 
 
 # Cadastra um jogo novo no jogos_seed.csv e informa o resultado. Os aliases chegam da CLI
@@ -1027,11 +1041,13 @@ def relatorio_calibracao_interativo() -> None:
 
 # Coleta os videos recentes de um canal do YouTube e mostra o resumo.
 def coletar_canal_youtube_interativo(
-    channel_id: str, limite: int, forcar: bool = False
+    channel_id: str, limite: int, forcar: bool = False, limite_comentarios: int = 0
 ) -> None:
     migrar_videos_coletados(VIDEOS_CSV)
     try:
-        resumo = coletar_canal(channel_id, VIDEOS_CSV, limite, forcar=forcar)
+        resumo = coletar_canal(
+            channel_id, VIDEOS_CSV, limite, forcar=forcar, limite_comentarios=limite_comentarios
+        )
     except RuntimeError as erro:
         print(f"Erro: {erro}")
         return
@@ -1349,8 +1365,8 @@ Categorias de comandos:
   Relatorios:     relatorio_diario, relatorio_meu_canal, relatorio_calibracao
   Monitoramento:  salvar_snapshot_ranking, comparar_rankings, ranking_watchlist,
                   adicionar_watchlist, listar_watchlist, remover_watchlist
-  Qualidade:      validar_dados, diagnosticar_dados, videos_sem_jogo, adicionar_jogo,
-                  adicionar_alias, redetectar_meus_videos, status_sistema
+  Qualidade:      validar_dados, diagnosticar_dados, videos_sem_jogo, descobertas_sem_jogo,
+                  adicionar_jogo, adicionar_alias, redetectar_meus_videos, status_sistema
   Rotina:         rotina_diaria (faz o fluxo do dia inteiro em um comando)
 
 Exemplos:
@@ -1415,6 +1431,11 @@ def _construir_parser() -> argparse.ArgumentParser:
         help="Lista videos de referencia sem jogo detectado, por views (ache aliases faltando).",
     )
 
+    subcomandos.add_parser(
+        "descobertas_sem_jogo",
+        help="Lista videos de referencia com gente perguntando o jogo e sem jogo identificado.",
+    )
+
     jogo_parser = subcomandos.add_parser(
         "adicionar_jogo",
         help="Cadastra um jogo novo no jogos_seed.csv (o detector so enxerga o que esta la).",
@@ -1468,6 +1489,12 @@ def _construir_parser() -> argparse.ArgumentParser:
         "--forcar",
         action="store_true",
         help="Recoleta tambem os videos ja salvos (atualiza descricao, tags e metricas).",
+    )
+    canal.add_argument(
+        "--comentarios",
+        type=_inteiro("--comentarios", minimo=0),
+        default=0,
+        help="Comentarios por video para o score de descoberta (0 = nao coleta; custa 1 unidade/video).",
     )
 
     meus_videos = subcomandos.add_parser(

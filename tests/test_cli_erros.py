@@ -138,3 +138,69 @@ def test_fit_valido_rejeita_fora_da_faixa_e_nao_numero():
     for valor in ["-1", "10.1", "abc", ""]:
         with pytest.raises(argparse.ArgumentTypeError):
             _fit_valido(valor)
+
+
+# --- descobertas_sem_jogo: a fila de trabalho humano ---
+
+def test_parser_aceita_descobertas_sem_jogo():
+    args = _construir_parser().parse_args(["descobertas_sem_jogo"])
+
+    assert args.comando == "descobertas_sem_jogo"
+
+
+def test_comando_descobertas_imprime_a_lista(tmp_path, monkeypatch, capsys):
+    import main
+
+    (tmp_path / "jogos_seed.csv").write_text(
+        "nome,aliases,genero,fit_inicial\nRoblox,roblox,variado,7\n", encoding="utf-8"
+    )
+    (tmp_path / "videos_coletados.csv").write_text(
+        "titulo,canal,plataforma,url,views,likes,comentarios,data_publicacao,"
+        "texto_comentarios,origem,tipo_video,descricao,tags\n"
+        "MATAR O VERITY,Lozao,youtube,https://y/1,724559,100,10,2026-08-01,"
+        "qual o nome do jogo,youtube,curto,,\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(main, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(main, "VIDEOS_CSV", tmp_path / "videos_coletados.csv")
+
+    assert main.main(["descobertas_sem_jogo"]) == 0
+
+    saida = capsys.readouterr().out
+    assert "MATAR O VERITY" in saida
+    assert "724,559 views" in saida
+    assert "(nenhum)" in saida
+
+
+# --- --comentarios: liga o score de descoberta, e custa quota ---
+
+def test_parser_coletar_canal_aceita_comentarios():
+    args = _construir_parser().parse_args(
+        ["coletar_canal_youtube", "UC_X", "--comentarios", "30"]
+    )
+
+    assert args.comentarios == 30
+
+
+def test_parser_coletar_canal_nao_coleta_comentario_por_padrao():
+    # Comentario custa 1 unidade de quota por video. O padrao tem que ser nao gastar.
+    args = _construir_parser().parse_args(["coletar_canal_youtube", "UC_X"])
+
+    assert args.comentarios == 0
+
+
+def test_comentarios_chega_ate_o_coletor(tmp_path, monkeypatch):
+    import main
+
+    recebido = {}
+
+    def _fake_coletar_canal(channel_id, destino, limite, forcar=False, limite_comentarios=0):
+        recebido["limite_comentarios"] = limite_comentarios
+        return {"lidos": 0, "encontrados": 0, "salvos": 0, "duplicados": 0, "erros": 0}
+
+    monkeypatch.setattr(main, "coletar_canal", _fake_coletar_canal)
+    monkeypatch.setattr(main, "VIDEOS_CSV", tmp_path / "videos_coletados.csv")
+
+    main.main(["coletar_canal_youtube", "UC_X", "--comentarios", "25"])
+
+    assert recebido["limite_comentarios"] == 25
