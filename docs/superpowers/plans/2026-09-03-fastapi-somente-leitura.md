@@ -740,7 +740,11 @@ def test_carregar_jogos_arquivo_ausente_devolve_lista_vazia(tmp_path, monkeypatc
 
 def test_carregar_jogos_arquivo_ilegivel_levanta_503(tmp_path, monkeypatch):
     caminho = tmp_path / "jogos_seed.csv"
-    caminho.mkdir()  # forca um erro de leitura: e um diretorio, nao um arquivo
+    # bytes invalidos em UTF-8 (encoding usado por _ler_linhas): dispara UnicodeDecodeError
+    # de verdade na leitura, sem depender de permissao de arquivo (que o Windows nao
+    # restringe do mesmo jeito que um diretorio vazio: st_size==0 tambem para diretorio,
+    # entao _ler_linhas nunca chegaria a abrir o arquivo se usassemos um diretorio aqui).
+    caminho.write_bytes(b"nome,aliases,genero,fit_inicial\n\xff\xfeinvalido\n")
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
 
     with pytest.raises(Exception) as excinfo:
@@ -1450,6 +1454,7 @@ Expected: 404 (rotas não existem)
 ```python
 from fastapi import APIRouter
 
+import config
 from api import dependencies
 from api.schemas import CandidatoRepeticaoOut, ComparacaoJogoOut, JogoQueFalhouOut, MeuVideoSemJogoOut
 from comparacao_meu_canal import comparar_recomendacoes_com_meu_canal
@@ -1462,7 +1467,11 @@ router = APIRouter(prefix="/meu-canal", tags=["meu-canal"])
 
 @router.get("/sem-jogo", response_model=list[MeuVideoSemJogoOut])
 def obter_meu_canal_sem_jogo():
-    videos = listar_meus_videos_sem_jogo(config_meus_videos_csv())
+    # Mesmo wrapper de erro (503 em leitura ilegivel) dos outros endpoints, via
+    # dependencies._seguro — listar_meus_videos_sem_jogo so aceita um caminho direto.
+    videos = dependencies._seguro(
+        listar_meus_videos_sem_jogo, config.MEUS_VIDEOS_CSV, "meus_videos.csv"
+    )
     return [
         MeuVideoSemJogoOut(
             titulo=video.titulo,
@@ -1499,14 +1508,7 @@ def obter_meu_canal_falhos():
     meus_videos = dependencies.carregar_meus_videos()
     falhos = jogos_que_nao_funcionaram(ranking, meus_videos)
     return [JogoQueFalhouOut.model_validate(f) for f in falhos]
-
-
-def config_meus_videos_csv():
-    import config
-    return config.MEUS_VIDEOS_CSV
 ```
-
-> **Nota:** `config_meus_videos_csv()` existe só porque `listar_meus_videos_sem_jogo` (em `meus_videos.py`) recebe um caminho direto em vez de usar `dependencies.carregar_*`. Se preferir manter o padrão de erro 503 dos outros endpoints, troque essa chamada por `dependencies._seguro(listar_meus_videos_sem_jogo, config.MEUS_VIDEOS_CSV, "meus_videos.csv")` e importe `config` no topo do arquivo — funcionalmente equivalente, só reusa o wrapper de erro já testado no Task 5.
 
 - [ ] **Step 4: Incluir o router em `src/api/main.py`**
 
