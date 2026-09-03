@@ -60,3 +60,14 @@ def test_id_canal_proprio_none_quando_ausente(monkeypatch):
 def test_id_canal_proprio_none_quando_vazio(monkeypatch):
     monkeypatch.setenv("MEU_CANAL_YOUTUBE_ID", "   ")
     assert ler_id_canal_proprio() is None
+
+
+def test_caminhos_de_dados_existem_e_sao_consistentes():
+    import config
+
+    assert config.DATA_DIR == config.BASE_DIR / "data"
+    assert config.VIDEOS_CSV == config.DATA_DIR / "videos_coletados.csv"
+    assert config.MEUS_VIDEOS_CSV == config.DATA_DIR / "meus_videos.csv"
+    assert config.HISTORICO_CSV == config.DATA_DIR / "historico_rankings.csv"
+    assert config.WATCHLIST_CSV == config.DATA_DIR / "watchlist_jogos.csv"
+    assert config.REPORTS_DIR == config.BASE_DIR / "reports"

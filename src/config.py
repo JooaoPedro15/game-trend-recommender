@@ -9,6 +9,15 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE_DIR / ".env"
 
+# Caminhos de dados compartilhados entre a CLI (main.py) e a API (api/). Ficam aqui
+# para nao criar duas fontes de verdade sobre onde os CSVs moram.
+DATA_DIR = BASE_DIR / "data"
+VIDEOS_CSV = DATA_DIR / "videos_coletados.csv"
+MEUS_VIDEOS_CSV = DATA_DIR / "meus_videos.csv"
+HISTORICO_CSV = DATA_DIR / "historico_rankings.csv"
+WATCHLIST_CSV = DATA_DIR / "watchlist_jogos.csv"
+REPORTS_DIR = BASE_DIR / "reports"
+
 try:
     from dotenv import load_dotenv
 except ImportError:

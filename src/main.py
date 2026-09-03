@@ -24,6 +24,12 @@ from comparacao_meu_canal import (
     imprimir_comparacao_meu_canal,
 )
 from config import (
+    DATA_DIR,
+    HISTORICO_CSV,
+    MEUS_VIDEOS_CSV,
+    REPORTS_DIR,
+    VIDEOS_CSV,
+    WATCHLIST_CSV,
     ler_chave_youtube,
     ler_id_canal_proprio,
     obter_meu_canal_youtube_id,
@@ -73,13 +79,7 @@ from descobertas import descobertas_sem_jogo, imprimir_descobertas
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-DATA_DIR = BASE_DIR / "data"
-VIDEOS_CSV = DATA_DIR / "videos_coletados.csv"
-MEUS_VIDEOS_CSV = DATA_DIR / "meus_videos.csv"
 MEU_CANAL_IDS_CHECKPOINT = DATA_DIR / "meu_canal_ids_checkpoint.json"
-HISTORICO_CSV = DATA_DIR / "historico_rankings.csv"
-WATCHLIST_CSV = DATA_DIR / "watchlist_jogos.csv"
-REPORTS_DIR = BASE_DIR / "reports"
 RANKING_REPORT = REPORTS_DIR / "ranking.md"
 
 
