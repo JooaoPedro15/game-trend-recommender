@@ -47,6 +47,7 @@ from validacao_dados import imprimir_validacao, validar_dados
 from leitor_csv import ler_canais_referencia, ler_jogos_seed, ler_videos_coletados
 from modelos import ComentariosColetados, VideoColetado
 from ranker import calcular_ranking, filtrar_oportunidades
+import ranking_service
 from relatorio import (
     gerar_relatorio_csv,
     gerar_relatorio_evidencias_markdown,
@@ -266,11 +267,9 @@ def main(argv: list[str] | None = None) -> int:
 def _carregar_ranking(
     plataforma: str | None = None, top: int | None = None, desde: date | None = None
 ):
-    canais = ler_canais_referencia(DATA_DIR / "canais_referencia.csv")
-    jogos = ler_jogos_seed(DATA_DIR / "jogos_seed.csv")
-    videos = ler_videos_coletados(VIDEOS_CSV)
-    meus_videos = ler_meus_videos(MEUS_VIDEOS_CSV)
-    return _montar_ranking(jogos, videos, canais, plataforma, top, desde, meus_videos)
+    return ranking_service.carregar_ranking(
+        DATA_DIR, VIDEOS_CSV, MEUS_VIDEOS_CSV, plataforma, top, desde
+    )
 
 
 # Aplica os filtros de plataforma e data e o limite Top N (se houver) e retorna o ranking.
@@ -284,14 +283,7 @@ def _montar_ranking(
     desde: date | None = None,
     meus_videos=None,
 ):
-    if plataforma:
-        videos = _filtrar_por_plataforma(videos, plataforma)
-    if desde is not None:
-        videos = _filtrar_por_data(videos, desde)
-    ranking = calcular_ranking(jogos, videos, canais, meus_videos)
-    if top is not None:
-        ranking = ranking[:top]
-    return ranking
+    return ranking_service.montar_ranking(jogos, videos, canais, plataforma, top, desde, meus_videos)
 
 
 def mostrar_ranking(
@@ -1694,27 +1686,8 @@ def _construir_parser() -> argparse.ArgumentParser:
     return parser
 
 
-# Mantem apenas os videos da plataforma informada, ignorando maiusculas/minusculas.
-def _filtrar_por_plataforma(
-    videos: list[VideoColetado], plataforma: str
-) -> list[VideoColetado]:
-    plataforma_alvo = plataforma.casefold()
-    return [video for video in videos if video.plataforma.casefold() == plataforma_alvo]
-
-
-# Mantem apenas os videos publicados em "desde" ou depois. Ignora videos com data invalida.
-def _filtrar_por_data(
-    videos: list[VideoColetado], desde: date
-) -> list[VideoColetado]:
-    selecionados = []
-    for video in videos:
-        try:
-            data_video = date.fromisoformat(video.data_publicacao)
-        except ValueError:
-            continue
-        if data_video >= desde:
-            selecionados.append(video)
-    return selecionados
+_filtrar_por_plataforma = ranking_service.filtrar_por_plataforma
+_filtrar_por_data = ranking_service.filtrar_por_data
 
 
 if __name__ == "__main__":
