@@ -72,8 +72,10 @@ os dataclasses podem mudar sem quebrar quem consome a API, desde que o schema n�
 
 ## Tratamento de erros
 
-- CSV ausente ou ilegível → `503` com mensagem clara (mesmo texto que a CLI já usa em
-  "arquivo não encontrado").
+- CSV ausente → mesmo comportamento da CLI hoje: `leitor_csv` trata arquivo ausente como
+  lista vazia, então a rota responde `200` com resultado vazio (ex.: ranking `[]`), não erro.
+- CSV presente mas ilegível (erro de permissão/encoding ao abrir o arquivo) → `503` com
+  mensagem clara.
 - Jogo não encontrado em `/evidencias/{jogo}` → `404`.
 - Histórico insuficiente em `/historico/comparacao` (menos de 2 snapshots) → `409` com
   mensagem explicando o motivo (mesma regra da CLI).
