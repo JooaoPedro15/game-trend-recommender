@@ -16,3 +16,7 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+from api.routers import ranking
+
+app.include_router(ranking.router)
