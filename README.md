@@ -57,7 +57,9 @@ test — it never writes scripts, hooks or tone of voice.
 
 ## Tech stack
 
-- **Python 3.10+** — standard library only at runtime (no third-party dependencies).
+- **Python 3.10+** — standard library only at runtime (no third-party dependencies). The
+  one exception is the optional FastAPI layer under `src/api/` (FastAPI/Uvicorn), which
+  is not required to use the CLI.
 - **argparse** for the command-line interface.
 - **pytest** for the test suite (dev-only dependency).
 
@@ -372,6 +374,23 @@ python -m pytest
 ```
 
 `pytest` is the only development dependency; the runtime itself stays standard-library only.
+
+## API (optional)
+
+A read-only FastAPI layer is available under `src/api/`, for a future web frontend and
+external integrations. It reuses the same pure logic and CSV reads as the CLI — no
+network calls, no database, no auth (local use only for now).
+
+```bash
+py -3.14 -m pip install -r requirements.txt
+py -3.14 -m uvicorn api.main:app --reload --app-dir src
+```
+
+Then open `http://127.0.0.1:8000/docs` for the interactive OpenAPI docs. Endpoints mirror
+the read-only CLI commands: `/ranking`, `/oportunidades`, `/evidencias/{jogo}`,
+`/watchlist`, `/watchlist/ranking`, `/diagnostico`, `/videos-sem-jogo`,
+`/descobertas-sem-jogo`, `/meu-canal/sem-jogo`, `/meu-canal/comparacao`,
+`/meu-canal/repetir`, `/meu-canal/falhos`, `/historico/comparacao`, `/status`.
 
 ## Public-repository notes
 
