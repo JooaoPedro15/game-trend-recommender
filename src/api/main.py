@@ -4,6 +4,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.routers import diagnostico, evidencias, meu_canal, ranking, sistema, watchlist
+
 app = FastAPI(
     title="Game Trend Recommender API",
     description="Leitura do ranking, evidencias, watchlist e status do sistema.",
@@ -16,8 +18,6 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
-
-from api.routers import diagnostico, evidencias, meu_canal, ranking, sistema, watchlist
 
 app.include_router(ranking.router)
 app.include_router(evidencias.router)
