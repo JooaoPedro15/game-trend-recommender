@@ -382,9 +382,12 @@ external integrations. It reuses the same pure logic and CSV reads as the CLI â€
 network calls, no database, no auth (local use only for now).
 
 ```bash
-py -3.14 -m pip install -r requirements.txt
-py -3.14 -m uvicorn api.main:app --reload --app-dir src
+python -m pip install -r requirements.txt
+python -m uvicorn api.main:app --reload --app-dir src
 ```
+
+`requirements.txt` now includes FastAPI/Uvicorn/httpx alongside the existing `python-dotenv`
+and `pytest` â€” they are only needed if you run the API layer.
 
 Then open `http://127.0.0.1:8000/docs` for the interactive OpenAPI docs. Endpoints mirror
 the read-only CLI commands: `/ranking`, `/oportunidades`, `/evidencias/{jogo}`,
