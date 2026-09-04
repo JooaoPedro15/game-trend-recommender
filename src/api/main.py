@@ -17,7 +17,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from api.routers import evidencias, ranking
+from api.routers import evidencias, ranking, watchlist
 
 app.include_router(ranking.router)
 app.include_router(evidencias.router)
+app.include_router(watchlist.router)
