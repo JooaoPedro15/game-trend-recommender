@@ -27,6 +27,24 @@ def test_status(tmp_path, monkeypatch):
     assert corpo["chave_configurada"] in {True, False}
 
 
+def test_status_arquivo_ilegivel_devolve_503(tmp_path, monkeypatch):
+    caminho = tmp_path / "videos.csv"
+    # bytes invalidos em UTF-8 (encoding usado por _ler_linhas): dispara UnicodeDecodeError
+    # de verdade na leitura, sem depender de permissao de arquivo (que o Windows nao
+    # restringe do mesmo jeito que um diretorio vazio: st_size==0 tambem para diretorio,
+    # entao _ler_linhas nunca chegaria a abrir o arquivo se usassemos um diretorio aqui).
+    caminho.write_bytes(b"titulo,canal\n\xff\xfeinvalido\n")
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config, "VIDEOS_CSV", caminho)
+    monkeypatch.setattr(config, "MEUS_VIDEOS_CSV", tmp_path / "meus_videos.csv")
+    monkeypatch.setattr(config, "HISTORICO_CSV", tmp_path / "historico.csv")
+    monkeypatch.setattr(config, "REPORTS_DIR", tmp_path / "reports")
+
+    resposta = client.get("/status")
+
+    assert resposta.status_code == 503
+
+
 def test_historico_comparacao_sem_dados_devolve_409(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "HISTORICO_CSV", tmp_path / "historico.csv")
 
